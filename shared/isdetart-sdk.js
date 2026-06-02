@@ -80,10 +80,9 @@
 
   const Api = {
     headers() {
-      return {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${CONFIG.token}`,
-      };
+      const h = { "Content-Type": "application/json" };
+      if (CONFIG.token) h["Authorization"] = `Bearer ${CONFIG.token}`;
+      return h;
     },
 
     async get(namespace, key) {

@@ -154,28 +154,59 @@ No painel do Cloudflare, no projeto Pages:
 
 ---
 
-### Passo 8 — Configurar o token no frontend
+### Passo 8 — Ativar o Cloudflare Access (autenticação do browser)
 
-O SDK precisa do token para autenticar com o Worker. A forma mais simples é
-injetar via uma variável global no HTML de cada ferramenta, lida de uma
-meta tag:
+Em vez de expor o token no HTML, usamos o **Cloudflare Access** (plano free)
+para proteger o domínio. O Access autentica o visitante por e-mail/OTP e injeta
+um JWT assinado em cada requisição — o Worker valida esse JWT sem precisar de
+nada no HTML.
 
-```html
-<head>
-  <!-- Cole o token aqui — é lido pelo SDK -->
-  <meta name="isdet-token" content="vdbJEKmk1DROS9j5nTCwhRbXMQMED8GCZfKV8pdGtyE">
-</head>
-<script>
-  window.__ISDET_TOKEN__ = document.querySelector('meta[name="isdet-token"]')?.content || "";
-  IsdetTools.configure({ token: window.__ISDET_TOKEN__ });
-</script>
-```
+#### 8.1 — Criar a aplicação no Zero Trust
 
-> **Nota de segurança**: o token no HTML é visível para quem inspecionar o
-> código-fonte. Para uso pessoal num domínio próprio, isso é aceitável — o
-> risco real é baixo porque o domínio é seu e o volume é pequeno. Se quiser
-> mais proteção, ative o **Cloudflare Access** na frente da aplicação
-> (plano free, autenticação por e-mail/OTP) e remova o token do HTML.
+1. No painel da Cloudflare: **Zero Trust → Access → Applications → Add an application**
+2. Escolha **Self-hosted**
+3. Preencha:
+   - **Application name**: `isdet-tools`
+   - **Application domain**: `tools.isdet.net`
+4. Em **Policies**, crie uma regra do tipo **Allow** com selector **Emails** e
+   adicione o seu e-mail (`renan_gmarques@hotmail.com`)
+5. Salve a aplicação
+
+#### 8.2 — Obter o AUD tag e o Team Domain
+
+Após salvar a aplicação:
+
+1. Clique em **Configure** na aplicação recém-criada
+2. Em **Additional settings**, copie o **Application Audience (AUD) Tag** (string hexadecimal)
+3. O **Team Domain** está em **Zero Trust → Settings → Custom Pages** ou na URL do
+   painel: `https://seutime.cloudflareaccess.com`
+
+#### 8.3 — Adicionar as variáveis de ambiente no Pages
+
+No painel da Cloudflare, no projeto Pages:
+
+1. **Settings → Environment variables → Production → Add variable**
+2. Adicione as duas variáveis abaixo e marque ambas como **Encrypt**:
+
+   | Nome | Valor |
+   |------|-------|
+   | `CF_TEAM_DOMAIN` | `https://seutime.cloudflareaccess.com` |
+   | `CF_POLICY_AUD` | o AUD tag copiado no passo anterior |
+
+3. Faça **redeploy** (Settings → Deployments → Retry deployment)
+
+#### Como funciona a partir de agora
+
+- **Browser**: o Access autentica via e-mail/OTP. Após o login, o Cloudflare injeta
+  automaticamente o header `Cf-Access-Jwt-Assertion` em cada requisição ao Worker.
+  O Worker valida o JWT com a chave pública do seu team domain — nenhum token
+  aparece no HTML.
+- **Claude.ai / acesso programático**: ainda usa o Bearer token via
+  `IsdetTools.configure({ token: "..." })`. O Worker aceita ambos os métodos.
+
+> **Teste local**: para desenvolvimento com `wrangler pages dev`, o Cloudflare
+> Access não está ativo. Adicione `CF_TEAM_DOMAIN` e `CF_POLICY_AUD` no `.dev.vars`
+> com os valores reais, ou use o Bearer token normalmente.
 
 ---
 

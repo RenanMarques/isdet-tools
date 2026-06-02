@@ -48,10 +48,63 @@ function notFound(request) {
   return response({ error: "Not found" }, 404, request);
 }
 
-function authenticate(request, env) {
+// ─── Cloudflare Access JWT validation ────────────────────────────────────────
+// Verifies the JWT that Cloudflare Access adds to every forwarded request.
+// Uses Web Crypto (available in Workers) — no npm packages needed.
+async function verifyAccessJWT(request, env) {
+  if (!env.CF_TEAM_DOMAIN || !env.CF_POLICY_AUD) return false;
+
+  const token = request.headers.get("Cf-Access-Jwt-Assertion");
+  if (!token) return false;
+
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return false;
+
+    const [headerB64, payloadB64, sigB64] = parts;
+    const b64 = (s) => atob(s.replace(/-/g, "+").replace(/_/g, "/"));
+
+    const header = JSON.parse(b64(headerB64));
+    const payload = JSON.parse(b64(payloadB64));
+
+    if (payload.exp < Date.now() / 1000) return false;
+
+    const auds = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    if (!auds.includes(env.CF_POLICY_AUD)) return false;
+
+    if (payload.iss !== env.CF_TEAM_DOMAIN) return false;
+
+    const res = await fetch(`${env.CF_TEAM_DOMAIN}/cdn-cgi/access/certs`);
+    if (!res.ok) return false;
+    const { keys } = await res.json();
+
+    const jwk = keys.find((k) => k.kid === header.kid) ?? keys[0];
+    if (!jwk) return false;
+
+    // Support both RSA (RS256) and EC (ES256) signing keys
+    const algo =
+      jwk.kty === "EC"
+        ? { import: { name: "ECDSA", namedCurve: jwk.crv || "P-256" }, verify: { name: "ECDSA", hash: "SHA-256" } }
+        : { import: { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, verify: "RSASSA-PKCS1-v1_5" };
+
+    const cryptoKey = await crypto.subtle.importKey("jwk", jwk, algo.import, false, ["verify"]);
+    const data = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+    const sig = Uint8Array.from(b64(sigB64), (c) => c.charCodeAt(0));
+
+    return crypto.subtle.verify(algo.verify, cryptoKey, sig, data);
+  } catch {
+    return false;
+  }
+}
+
+// Accepts either a Bearer token (programmatic / Claude.ai access)
+// or a Cloudflare Access JWT (browser access through tools.isdet.net).
+async function authenticate(request, env) {
   const header = request.headers.get("Authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return token === env.ISDET_TOOLS_API_TOKEN;
+  if (token && token === env.ISDET_TOOLS_API_TOKEN) return true;
+
+  return verifyAccessJWT(request, env);
 }
 
 export async function onRequest(context) {
@@ -63,7 +116,7 @@ export async function onRequest(context) {
   }
 
   // Auth
-  if (!authenticate(request, env)) {
+  if (!await authenticate(request, env)) {
     return unauthorized(request);
   }
 

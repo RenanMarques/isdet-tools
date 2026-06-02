@@ -267,9 +267,9 @@ tr:hover td{background:var(--bg2)}
 
 <script>
 // ─── Inicialização do SDK ────────────────────────────────────────────────────
-IsdetTools.configure({
-  token: window.__ISDET_TOKEN__ || "",   // injetado via meta tag ou env (ver README)
-});
+// No browser: Cloudflare Access handles auth transparently (no token needed).
+// For programmatic access (e.g. Claude.ai): call configure({ token: "..." }) manually.
+IsdetTools.configure({});
 IsdetTools.mountSyncStatus(document.getElementById("sync-indicator"));
 
 const db = IsdetTools.createStore("custos");
