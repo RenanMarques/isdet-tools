@@ -1,0 +1,15 @@
+# wrangler.toml
+# Configuração do projeto Cloudflare Pages + D1
+# Documentação: https://developers.cloudflare.com/pages/functions/bindings/
+
+name = "isdet-tools"
+compatibility_date = "2024-01-01"
+
+# Banco D1 — será criado no passo 2 do README
+[[d1_databases]]
+binding = "DB"
+database_name = "isdet-tools-db"
+database_id   = "SUBSTITUA_PELO_ID_GERADO_NO_PASSO_2"
+
+# Variáveis de ambiente ficam no painel do Cloudflare (não aqui),
+# pois contêm segredos. Ver README — seção "Configurar variáveis de ambiente".
