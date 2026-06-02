@@ -163,11 +163,6 @@
     },
 
     async flush() {
-      if (!CONFIG.token) {
-        this._emit("no-token");
-        return;
-      }
-
       const queue = await Queue.load();
       if (!queue.length) {
         this._emit("synced", { lastSync: this._lastSync });
@@ -241,8 +236,7 @@
         const local = await LocalStorage.get(localKey(key));
 
         // Tenta buscar versão remota em background (não bloqueia)
-        if (CONFIG.token) {
-          Api.get(namespace, key)
+        Api.get(namespace, key)
             .then(async (remote) => {
               const remoteTs = remote.updated_at || 0;
               const localTs = local?._updated_at || 0;
@@ -255,7 +249,6 @@
               }
             })
             .catch(() => {}); // silencioso — offline ou erro temporário
-        }
 
         return local?.value ?? null;
       },
@@ -308,7 +301,6 @@
       synced:   { icon: "ti-cloud-check",  text: "Sincronizado",      color: "var(--color-text-success)" },
       error:    { icon: "ti-cloud-x",      text: "Erro na sync",      color: "var(--color-text-danger)" },
       offline:  { icon: "ti-wifi-off",     text: "Offline",           color: "var(--color-text-secondary)" },
-      "no-token": { icon: "ti-lock-off",   text: "Token não configurado", color: "var(--color-text-danger)" },
     };
 
     el.style.cssText =
