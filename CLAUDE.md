@@ -1,3 +1,56 @@
+# isdet-tools
+
+Ferramentas internas para IsdetCompany hospedadas no Cloudflare Pages. Cada ferramenta é uma página HTML isolada que usa um SDK compartilhado para persistência local-first com sync automático.
+
+## Stack
+
+- **Cloudflare Pages** — hospedagem estática + Pages Functions
+- **Cloudflare D1** (SQLite) — persistência via `env.DB`
+- **Cloudflare Access** — autenticação no browser (JWT automático)
+- Sem build step, sem npm, JS vanilla
+
+## Camadas
+
+```
+apps/<tool>/index.html       UI + lógica da ferramenta
+shared/isdetart-sdk.js       SDK compartilhado (IIFE → window.IsdetTools)
+functions/api/[[route]].js   Worker gateway (REST → D1)
+```
+
+## Modelo de dados
+
+Rotas do Worker seguem sempre o padrão de 3 segmentos:
+
+```
+/api/:namespace/:collection/:id
+```
+
+D1 — tabela `records(namespace, collection, id, data, created_at, updated_at)`.
+`namespace` = ferramenta. `collection` = tipo de entidade. `id` = TEXT (string).
+
+## Invariantes do SDK
+
+- **Local-first**: `findAll()` e `find()` retornam o cache local imediatamente; o servidor é consultado em background. Não assuma dados frescos do servidor na chamada.
+- **Índice de coleção**: `__isdet__<ns>__<coll>__$index` é um array de IDs em localStorage, fonte de verdade local para `findAll()`. É reconstruído automaticamente após sync remoto — nunca manipular diretamente.
+- **IDs numéricos** (`Date.now()`) são aceitos — o SDK os stringifica internamente para chaves de storage e URLs; o campo `id` dentro do objeto `data` preserva o tipo original.
+- `save()` e `remove()` já disparam flush. Não chamar `store.sync()` em fluxos normais.
+- **Single-user**: sem resolução de conflito além de last-write-wins por `updated_at`. Não adicionar lógica de merge.
+
+## Invariantes do Worker
+
+- `created_at` nunca é sobrescrito no `ON CONFLICT DO UPDATE` — ausente da cláusula UPDATE intencionalmente.
+- Mudanças no schema D1 são **sempre aditivas** (novas tabelas ou colunas). Nunca `DROP TABLE` nem `DROP COLUMN`.
+- Auth aceita Bearer token (`ISDET_TOOLS_API_TOKEN`) **ou** CF Access JWT — ambos válidos; não remover nenhum dos dois caminhos.
+
+## Adicionar uma nova ferramenta
+
+1. Criar `apps/<nome>/index.html`
+2. Carregar o SDK: `<script src="/shared/isdetart-sdk.js"></script>`
+3. Inicializar: `IsdetTools.configure({})` e `const store = IsdetTools.createStore('<nome>')`
+4. Usar coleções: `const col = store.collection('<entidade>')` com `save / find / findAll / remove`
+
+Sem migração de banco necessária — coleções novas surgem no primeiro `save()`.
+
 # Instruções para Claude Code
 
 ## Push de commits
