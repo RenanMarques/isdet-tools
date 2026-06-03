@@ -3,12 +3,13 @@
  * Cloudflare Pages Function (catch-all route)
  *
  * Rotas:
- *   GET  /api/:namespace/:key   → lê um valor
- *   PUT  /api/:namespace/:key   → escreve um valor
- *   DELETE /api/:namespace/:key → remove um valor
- *   GET  /api/:namespace        → lista todas as chaves do namespace
+ *   GET    /api/:namespace/:collection        → lista registros da coleção
+ *   GET    /api/:namespace/:collection/:id    → lê um registro
+ *   PUT    /api/:namespace/:collection/:id    → upsert de um registro
+ *   DELETE /api/:namespace/:collection/:id    → remove um registro
  *
  * Auth: header "Authorization: Bearer <ISDET_TOOLS_API_TOKEN>"
+ *       ou Cloudflare Access JWT
  */
 
 const CORS_ORIGIN = "https://tools.isdet.net";
@@ -17,8 +18,8 @@ function cors(request) {
   const origin = request.headers.get("Origin") || "";
   const allowed =
     origin === CORS_ORIGIN ||
-    origin.endsWith(".pages.dev") || // previews do Cloudflare Pages
-    origin === "https://claude.ai";  // acesso dentro do claude.ai
+    origin.endsWith(".pages.dev") ||
+    origin === "https://claude.ai";
   return allowed ? origin : CORS_ORIGIN;
 }
 
@@ -49,8 +50,6 @@ function notFound(request) {
 }
 
 // ─── Cloudflare Access JWT validation ────────────────────────────────────────
-// Verifies the JWT that Cloudflare Access adds to every forwarded request.
-// Uses Web Crypto (available in Workers) — no npm packages needed.
 async function verifyAccessJWT(request, env) {
   if (!env.CF_TEAM_DOMAIN || !env.CF_POLICY_AUD) return false;
 
@@ -81,7 +80,6 @@ async function verifyAccessJWT(request, env) {
     const jwk = keys.find((k) => k.kid === header.kid) ?? keys[0];
     if (!jwk) return false;
 
-    // Support both RSA (RS256) and EC (ES256) signing keys
     const algo =
       jwk.kty === "EC"
         ? { import: { name: "ECDSA", namedCurve: jwk.crv || "P-256" }, verify: { name: "ECDSA", hash: "SHA-256" } }
@@ -97,8 +95,6 @@ async function verifyAccessJWT(request, env) {
   }
 }
 
-// Accepts either a Bearer token (programmatic / Claude.ai access)
-// or a Cloudflare Access JWT (browser access through tools.isdet.net).
 async function authenticate(request, env) {
   const header = request.headers.get("Authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -110,71 +106,78 @@ async function authenticate(request, env) {
 export async function onRequest(context) {
   const { request, env, params } = context;
 
-  // Preflight CORS
   if (request.method === "OPTIONS") {
     return response({}, 204, request);
   }
 
-  // Auth
   if (!await authenticate(request, env)) {
     return unauthorized(request);
   }
 
-  // Inicializa tabela se necessário
   await env.DB.exec(`
-    CREATE TABLE IF NOT EXISTS store (
-      namespace TEXT NOT NULL,
-      key       TEXT NOT NULL,
-      value     TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS records (
+      namespace  TEXT    NOT NULL,
+      collection TEXT    NOT NULL,
+      id         TEXT    NOT NULL,
+      data       TEXT    NOT NULL,
+      created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
-      PRIMARY KEY (namespace, key)
+      PRIMARY KEY (namespace, collection, id)
     )
   `);
 
-  // Extrai segmentos: /api/:namespace/:key?
   const segments = (params.route || []).filter(Boolean);
-  const namespace = segments[0];
-  const key = segments[1];
+  const namespace  = segments[0];
+  const collection = segments[1];
+  const id         = segments[2];
 
-  if (!namespace) {
-    return badRequest("namespace required", request);
+  if (!namespace || !collection) {
+    return badRequest("namespace and collection required", request);
   }
 
-  // Sanitiza namespace e key (só alfanumérico, hífen e underscore)
   const safe = /^[a-zA-Z0-9_-]+$/;
-  if (!safe.test(namespace) || (key && !safe.test(key))) {
-    return badRequest("invalid namespace or key", request);
+  if (!safe.test(namespace) || !safe.test(collection) || (id && !safe.test(id))) {
+    return badRequest("invalid namespace, collection or id", request);
   }
 
   const method = request.method;
 
-  // GET /api/:namespace → lista chaves
-  if (method === "GET" && !key) {
+  // GET /api/:namespace/:collection → lista registros
+  if (method === "GET" && !id) {
     const { results } = await env.DB.prepare(
-      "SELECT key, updated_at FROM store WHERE namespace = ? ORDER BY updated_at DESC"
+      "SELECT id, data, created_at, updated_at FROM records WHERE namespace = ? AND collection = ? ORDER BY updated_at DESC"
     )
-      .bind(namespace)
+      .bind(namespace, collection)
       .all();
-    return response({ namespace, keys: results }, 200, request);
+    return response({
+      namespace,
+      collection,
+      records: results.map((r) => ({
+        id: r.id,
+        data: JSON.parse(r.data),
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      })),
+    }, 200, request);
   }
 
-  // GET /api/:namespace/:key → lê valor
-  if (method === "GET" && key) {
+  // GET /api/:namespace/:collection/:id → lê registro
+  if (method === "GET" && id) {
     const row = await env.DB.prepare(
-      "SELECT value, updated_at FROM store WHERE namespace = ? AND key = ?"
+      "SELECT data, created_at, updated_at FROM records WHERE namespace = ? AND collection = ? AND id = ?"
     )
-      .bind(namespace, key)
+      .bind(namespace, collection, id)
       .first();
     if (!row) return notFound(request);
     return response(
-      { namespace, key, value: JSON.parse(row.value), updated_at: row.updated_at },
+      { namespace, collection, id, data: JSON.parse(row.data), created_at: row.created_at, updated_at: row.updated_at },
       200,
       request
     );
   }
 
-  // PUT /api/:namespace/:key → escreve valor
-  if (method === "PUT" && key) {
+  // PUT /api/:namespace/:collection/:id → upsert
+  if (method === "PUT" && id) {
     let body;
     try {
       body = await request.json();
@@ -183,29 +186,35 @@ export async function onRequest(context) {
     }
 
     const now = Date.now();
-    const serialized = JSON.stringify(body.value ?? body);
+    const serialized = JSON.stringify(body);
 
     await env.DB.prepare(
-      `INSERT INTO store (namespace, key, value, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT (namespace, key) DO UPDATE SET
-         value = excluded.value,
+      `INSERT INTO records (namespace, collection, id, data, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT (namespace, collection, id) DO UPDATE SET
+         data       = excluded.data,
          updated_at = excluded.updated_at`
     )
-      .bind(namespace, key, serialized, now)
+      .bind(namespace, collection, id, serialized, now, now)
       .run();
 
-    return response({ ok: true, namespace, key, updated_at: now }, 200, request);
+    const row = await env.DB.prepare(
+      "SELECT created_at FROM records WHERE namespace = ? AND collection = ? AND id = ?"
+    )
+      .bind(namespace, collection, id)
+      .first();
+
+    return response({ ok: true, namespace, collection, id, created_at: row.created_at, updated_at: now }, 200, request);
   }
 
-  // DELETE /api/:namespace/:key → remove valor
-  if (method === "DELETE" && key) {
+  // DELETE /api/:namespace/:collection/:id → remove
+  if (method === "DELETE" && id) {
     await env.DB.prepare(
-      "DELETE FROM store WHERE namespace = ? AND key = ?"
+      "DELETE FROM records WHERE namespace = ? AND collection = ? AND id = ?"
     )
-      .bind(namespace, key)
+      .bind(namespace, collection, id)
       .run();
-    return response({ ok: true, namespace, key }, 200, request);
+    return response({ ok: true, namespace, collection, id }, 200, request);
   }
 
   return response({ error: "Method not allowed" }, 405, request);

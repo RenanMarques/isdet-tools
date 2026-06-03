@@ -272,20 +272,17 @@ tr:hover td{background:var(--bg2)}
 IsdetTools.configure({});
 IsdetTools.mountSyncStatus(document.getElementById("sync-indicator"));
 
-const db = IsdetTools.createStore("custos");
+const store       = IsdetTools.createStore("custos");
+const insumos_col = store.collection("insumos");
+const sessoes_col = store.collection("sessoes");
 
 // ─── Estado em memória ───────────────────────────────────────────────────────
 let insumos = [], sessoes = [], filtroTecnica = "";
 
 async function load() {
-  insumos  = (await db.get("insumos"))  || [];
-  sessoes  = (await db.get("sessoes"))  || [];
+  insumos = await insumos_col.findAll();
+  sessoes = await sessoes_col.findAll();
   renderAll();
-}
-
-async function persist() {
-  await db.set("insumos", insumos);
-  await db.set("sessoes", sessoes);
 }
 
 function renderAll() {
@@ -311,14 +308,14 @@ function showTab(id, btn) {
 }
 
 // ─── Insumos ──────────────────────────────────────────────────────────────────
-function salvarInsumo() {
+async function salvarInsumo() {
   const nome = document.getElementById("ins-nome").value.trim();
   if (!nome) { alert("Informe o nome do insumo."); return; }
   const qtd    = parseFloat(document.getElementById("ins-qtd").value) || 0;
   const valor  = parseFloat(document.getElementById("ins-valor").value) || 0;
   const raw    = parseFloat(document.getElementById("ins-estoque").value);
   const alerta = parseFloat(document.getElementById("ins-alerta").value) || 0;
-  insumos.push({
+  const novo = {
     id: Date.now(),
     nome,
     tecnica:  document.getElementById("ins-tecnica").value,
@@ -327,16 +324,19 @@ function salvarInsumo() {
     estoque: isNaN(raw) ? qtd : raw,
     alerta,
     notas: document.getElementById("ins-notas").value.trim(),
-  });
-  persist(); renderAll(); renderInsumosSessao();
+  };
+  insumos.push(novo);
+  await insumos_col.save(novo);
+  renderAll(); renderInsumosSessao();
   ["ins-nome","ins-qtd","ins-valor","ins-estoque","ins-alerta","ins-notas"]
     .forEach(id => document.getElementById(id).value = "");
 }
 
-function removerInsumo(id) {
+async function removerInsumo(id) {
   if (!confirm("Remover insumo?")) return;
   insumos = insumos.filter(i => i.id !== id);
-  persist(); renderAll(); renderInsumosSessao();
+  await insumos_col.remove(id);
+  renderAll(); renderInsumosSessao();
 }
 
 function renderTabelaInsumos() {
@@ -389,12 +389,13 @@ function renderInsumosSessao() {
   });
 }
 
-function salvarSessao() {
+async function salvarSessao() {
   const data = document.getElementById("ses-data").value;
   if (!data) { alert("Informe a data da sessão."); return; }
   const tec  = document.getElementById("ses-tecnica").value;
   const rel  = insumos.filter(i => i.tecnica === tec || i.tecnica === "Geral");
   const usados = [];
+  const insumosAfetados = [];
   let custoTotal = 0;
   rel.forEach(i => {
     const el = document.getElementById("ses-ins-" + i.id);
@@ -404,11 +405,12 @@ function salvarSessao() {
       usados.push({ insId: i.id, nome: i.nome, unidade: i.unidade, qty: q, custo: sub });
       custoTotal += sub;
       i.estoque = Math.max(0, i.estoque - q);
+      insumosAfetados.push(i);
     }
   });
   const pecas = parseFloat(document.getElementById("ses-pecas").value) || 1;
   const ok    = parseFloat(document.getElementById("ses-ok").value) || 0;
-  sessoes.push({
+  const novaSessao = {
     id: Date.now(), data, tecnica: tec,
     substrato:    document.getElementById("ses-substrato").value,
     pecas, ok,
@@ -419,17 +421,23 @@ function salvarSessao() {
     obs:     document.getElementById("ses-obs").value.trim(),
     insumos: usados, custoTotal,
     custoPorPecaOk: ok > 0 ? custoTotal / ok : null,
-  });
-  persist(); renderAll(); renderInsumosSessao();
+  };
+  for (const i of insumosAfetados) {
+    await insumos_col.save(i);
+  }
+  sessoes.push(novaSessao);
+  await sessoes_col.save(novaSessao);
+  renderAll(); renderInsumosSessao();
   ["ses-data","ses-pecas","ses-ok","ses-params","ses-nota","ses-obs"]
     .forEach(id => document.getElementById(id).value = "");
   document.getElementById("ses-status").value = "teste";
 }
 
-function removerSessao(id) {
+async function removerSessao(id) {
   if (!confirm("Remover sessão?")) return;
   sessoes = sessoes.filter(s => s.id !== id);
-  persist(); renderAll();
+  await sessoes_col.remove(id);
+  renderAll();
 }
 
 function verSessao(id) {

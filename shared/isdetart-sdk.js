@@ -5,9 +5,13 @@
  *
  *   <script src="/shared/isdetart-sdk.js"></script>
  *   <script>
- *     const db = IsdetTools.createStore('minha-ferramenta')
- *     await db.set('chave', dados)
- *     const dados = await db.get('chave')
+ *     const store = IsdetTools.createStore('minha-ferramenta')
+ *     const itens = store.collection('item')
+ *
+ *     await itens.save({ id: 'abc', nome: 'Exemplo' })
+ *     const item  = await itens.find('abc')
+ *     const todos = await itens.findAll()
+ *     await itens.remove('abc')
  *   </script>
  *
  * O SDK cuida de:
@@ -24,9 +28,9 @@
 
   const CONFIG = {
     apiBase: "https://tools.isdet.net/api",
-    token: "", // definido via IsdetTools.configure({ token: '...' })
-    syncInterval: 30_000,   // tenta sincronizar a cada 30s
-    retryDelay: 5_000,      // espera 5s antes de tentar de novo após falha
+    token: "",
+    syncInterval: 30_000,
+    retryDelay: 5_000,
     maxRetries: 5,
   };
 
@@ -35,12 +39,10 @@
   const LocalStorage = {
     async get(key) {
       try {
-        // claude.ai
         if (typeof window.storage?.get === "function") {
           const r = await window.storage.get(key);
           return r ? JSON.parse(r.value) : null;
         }
-        // navegador padrão
         const raw = localStorage.getItem(key);
         return raw ? JSON.parse(raw) : null;
       } catch {
@@ -85,27 +87,34 @@
       return h;
     },
 
-    async get(namespace, key) {
-      const url = key
-        ? `${CONFIG.apiBase}/${namespace}/${key}`
-        : `${CONFIG.apiBase}/${namespace}`;
-      const r = await fetch(url, { headers: this.headers() });
-      if (!r.ok) throw new Error(`API ${r.status}`);
-      return r.json();
-    },
-
-    async put(namespace, key, value) {
-      const r = await fetch(`${CONFIG.apiBase}/${namespace}/${key}`, {
-        method: "PUT",
+    async getAll(namespace, collection) {
+      const r = await fetch(`${CONFIG.apiBase}/${namespace}/${collection}`, {
         headers: this.headers(),
-        body: JSON.stringify({ value }),
       });
       if (!r.ok) throw new Error(`API ${r.status}`);
       return r.json();
     },
 
-    async delete(namespace, key) {
-      const r = await fetch(`${CONFIG.apiBase}/${namespace}/${key}`, {
+    async getOne(namespace, collection, id) {
+      const r = await fetch(`${CONFIG.apiBase}/${namespace}/${collection}/${id}`, {
+        headers: this.headers(),
+      });
+      if (!r.ok) throw new Error(`API ${r.status}`);
+      return r.json();
+    },
+
+    async put(namespace, collection, id, data) {
+      const r = await fetch(`${CONFIG.apiBase}/${namespace}/${collection}/${id}`, {
+        method: "PUT",
+        headers: this.headers(),
+        body: JSON.stringify(data),
+      });
+      if (!r.ok) throw new Error(`API ${r.status}`);
+      return r.json();
+    },
+
+    async delete(namespace, collection, id) {
+      const r = await fetch(`${CONFIG.apiBase}/${namespace}/${collection}/${id}`, {
         method: "DELETE",
         headers: this.headers(),
       });
@@ -129,18 +138,23 @@
 
     async push(op) {
       const queue = await this.load();
-      // Remove operações anteriores para a mesma namespace+key (a mais nova substitui)
       const filtered = queue.filter(
-        (o) => !(o.namespace === op.namespace && o.key === op.key)
+        (o) => !(
+          o.namespace  === op.namespace  &&
+          o.collection === op.collection &&
+          o.id         === op.id
+        )
       );
       filtered.push({ ...op, retries: 0, timestamp: Date.now() });
       await this.save(filtered);
     },
 
-    async remove(namespace, key) {
+    async remove(namespace, collection, id) {
       const queue = await this.load();
       await this.save(
-        queue.filter((o) => !(o.namespace === namespace && o.key === key))
+        queue.filter(
+          (o) => !(o.namespace === namespace && o.collection === collection && o.id === id)
+        )
       );
     },
   };
@@ -148,7 +162,7 @@
   // ─── Motor de sincronização ───────────────────────────────────────────────────
 
   const SyncEngine = {
-    _status: "idle", // idle | syncing | synced | error | offline | no-token
+    _status: "idle",
     _listeners: [],
     _timer: null,
     _lastSync: null,
@@ -171,21 +185,20 @@
 
       this._emit("syncing", { pending: queue.length });
 
-      let failed = [];
+      const failed = [];
       for (const op of queue) {
         try {
-          if (op.type === "put") {
-            await Api.put(op.namespace, op.key, op.value);
-          } else if (op.type === "delete") {
-            await Api.delete(op.namespace, op.key);
+          if (op.type === "save") {
+            await Api.put(op.namespace, op.collection, op.id, op.data);
+          } else if (op.type === "remove") {
+            await Api.delete(op.namespace, op.collection, op.id);
           }
-          await Queue.remove(op.namespace, op.key);
-        } catch (err) {
+          await Queue.remove(op.namespace, op.collection, op.id);
+        } catch {
           const retries = (op.retries || 0) + 1;
           if (retries < CONFIG.maxRetries) {
             failed.push({ ...op, retries });
           }
-          // se excedeu maxRetries, descarta a operação
         }
       }
 
@@ -203,7 +216,6 @@
       this.flush();
       this._timer = setInterval(() => this.flush(), CONFIG.syncInterval);
 
-      // Sincroniza ao recuperar conexão
       window.addEventListener("online", () => this.flush());
       window.addEventListener("focus", () => this.flush());
     },
@@ -214,6 +226,128 @@
     },
   };
 
+  // ─── Coleção ──────────────────────────────────────────────────────────────────
+
+  function createCollection(namespace, collectionName) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(collectionName)) {
+      throw new Error("collection inválida: use apenas letras, números, - e _");
+    }
+
+    function recordKey(id) {
+      return `__isdet__${namespace}__${collectionName}__${id}`;
+    }
+    const indexKey = `__isdet__${namespace}__${collectionName}__$index`;
+
+    const col = {
+      // ── índice local ──────────────────────────────────────────────────────────
+
+      async _getIndex() {
+        return (await LocalStorage.get(indexKey)) || [];
+      },
+
+      async _addToIndex(id) {
+        const idx = await this._getIndex();
+        if (!idx.includes(id)) {
+          idx.push(id);
+          await LocalStorage.set(indexKey, idx);
+        }
+      },
+
+      async _removeFromIndex(id) {
+        const idx = await this._getIndex();
+        await LocalStorage.set(indexKey, idx.filter((x) => x !== id));
+      },
+
+      // ── API pública ───────────────────────────────────────────────────────────
+
+      /**
+       * Salva (insert ou update) um registro.
+       * Se data.id for omitido, gera um UUID automaticamente.
+       * Retorna o objeto salvo com o id usado.
+       */
+      async save(data) {
+        const id = data.id != null ? String(data.id) : crypto.randomUUID();
+        const now = Date.now();
+
+        const existing = await LocalStorage.get(recordKey(id));
+        const createdAt = existing?._createdAt ?? now;
+
+        await LocalStorage.set(recordKey(id), { data, _createdAt: createdAt, _updatedAt: now });
+        await this._addToIndex(id);
+        await Queue.push({ type: "save", namespace, collection: collectionName, id, data });
+        SyncEngine.flush();
+
+        return { ...data, id: data.id != null ? data.id : id };
+      },
+
+      /**
+       * Busca um registro pelo id. Retorna null se não encontrado.
+       * Verifica versão remota em background sem bloquear.
+       */
+      async find(id) {
+        const sid = String(id);
+        const local = await LocalStorage.get(recordKey(sid));
+
+        Api.getOne(namespace, collectionName, sid)
+          .then(async (remote) => {
+            if (remote.updated_at > (local?._updatedAt ?? 0)) {
+              await LocalStorage.set(recordKey(sid), {
+                data: remote.data,
+                _createdAt: remote.created_at,
+                _updatedAt: remote.updated_at,
+              });
+              await col._addToIndex(sid);
+            }
+          })
+          .catch(() => {});
+
+        return local ? local.data : null;
+      },
+
+      /**
+       * Retorna todos os registros da coleção (local-first).
+       * Sincroniza com o servidor em background.
+       */
+      async findAll() {
+        const idx = await this._getIndex();
+        const entries = await Promise.all(idx.map((id) => LocalStorage.get(recordKey(id))));
+        const local = entries.filter(Boolean).map((r) => r.data);
+
+        Api.getAll(namespace, collectionName)
+          .then(async (remote) => {
+            for (const r of remote.records) {
+              const existing = await LocalStorage.get(recordKey(r.id));
+              if (r.updated_at > (existing?._updatedAt ?? 0)) {
+                await LocalStorage.set(recordKey(r.id), {
+                  data: r.data,
+                  _createdAt: r.created_at,
+                  _updatedAt: r.updated_at,
+                });
+                await col._addToIndex(r.id);
+              }
+            }
+          })
+          .catch(() => {});
+
+        return local;
+      },
+
+      /**
+       * Remove um registro pelo id.
+       */
+      async remove(id) {
+        const sid = String(id);
+        await LocalStorage.delete(recordKey(sid));
+        await this._removeFromIndex(sid);
+        await Queue.push({ type: "remove", namespace, collection: collectionName, id: sid });
+        SyncEngine.flush();
+        return true;
+      },
+    };
+
+    return col;
+  }
+
   // ─── Store por namespace ──────────────────────────────────────────────────────
 
   function createStore(namespace) {
@@ -221,63 +355,26 @@
       throw new Error("namespace inválido: use apenas letras, números, - e _");
     }
 
-    function localKey(key) {
-      return `__isdet__${namespace}__${key}`;
-    }
+    const _collections = {};
 
     return {
       namespace,
 
       /**
-       * Lê um valor. Sempre retorna do local (rápido, funciona offline).
-       * Em background, verifica se há versão mais recente no servidor.
+       * Retorna (ou cria) a coleção com o nome dado.
+       * Instâncias são memoizadas dentro do store.
        */
-      async get(key) {
-        const local = await LocalStorage.get(localKey(key));
-
-        // Tenta buscar versão remota em background (não bloqueia)
-        Api.get(namespace, key)
-            .then(async (remote) => {
-              const remoteTs = remote.updated_at || 0;
-              const localTs = local?._updated_at || 0;
-              if (remoteTs > localTs) {
-                // remoto é mais novo: atualiza local silenciosamente
-                await LocalStorage.set(localKey(key), {
-                  value: remote.value,
-                  _updated_at: remoteTs,
-                });
-              }
-            })
-            .catch(() => {}); // silencioso — offline ou erro temporário
-
-        return local?.value ?? null;
+      collection(name) {
+        if (!_collections[name]) {
+          _collections[name] = createCollection(namespace, name);
+        }
+        return _collections[name];
       },
 
       /**
-       * Escreve um valor localmente e enfileira sync com o servidor.
+       * Força sincronização imediata da fila pendente.
        */
-      async set(key, value) {
-        const now = Date.now();
-        await LocalStorage.set(localKey(key), { value, _updated_at: now });
-        await Queue.push({ type: "put", namespace, key, value });
-        SyncEngine.flush(); // tenta sincronizar imediatamente
-        return true;
-      },
-
-      /**
-       * Remove um valor localmente e enfileira deleção no servidor.
-       */
-      async delete(key) {
-        await LocalStorage.delete(localKey(key));
-        await Queue.push({ type: "delete", namespace, key });
-        SyncEngine.flush();
-        return true;
-      },
-
-      /**
-       * Força sincronização imediata.
-       */
-      async sync() {
+      sync() {
         return SyncEngine.flush();
       },
     };
@@ -285,22 +382,15 @@
 
   // ─── Componente de status de sync ────────────────────────────────────────────
 
-  /**
-   * Monta um indicador de status de sync num elemento existente.
-   *
-   * Uso:
-   *   <div id="sync-status"></div>
-   *   IsdetTools.mountSyncStatus(document.getElementById('sync-status'))
-   */
   function mountSyncStatus(el) {
     if (!el) return;
 
     const states = {
-      idle:     { icon: "ti-clock",        text: "Aguardando sync",   color: "var(--color-text-tertiary)" },
-      syncing:  { icon: "ti-refresh",      text: "Sincronizando…",    color: "var(--color-text-secondary)", spin: true },
-      synced:   { icon: "ti-cloud-check",  text: "Sincronizado",      color: "var(--color-text-success)" },
-      error:    { icon: "ti-cloud-x",      text: "Erro na sync",      color: "var(--color-text-danger)" },
-      offline:  { icon: "ti-wifi-off",     text: "Offline",           color: "var(--color-text-secondary)" },
+      idle:    { icon: "ti-clock",       text: "Aguardando sync",  color: "var(--color-text-tertiary)" },
+      syncing: { icon: "ti-refresh",     text: "Sincronizando…",   color: "var(--color-text-secondary)", spin: true },
+      synced:  { icon: "ti-cloud-check", text: "Sincronizado",     color: "var(--color-text-success)" },
+      error:   { icon: "ti-cloud-x",     text: "Erro na sync",     color: "var(--color-text-danger)" },
+      offline: { icon: "ti-wifi-off",    text: "Offline",          color: "var(--color-text-secondary)" },
     };
 
     el.style.cssText =
@@ -324,12 +414,10 @@
       `;
     }
 
-    // Injeta keyframe de rotação uma única vez
     if (!document.getElementById("__isdet_spin_style")) {
       const style = document.createElement("style");
       style.id = "__isdet_spin_style";
-      style.textContent =
-        "@keyframes __isdet_spin{to{transform:rotate(360deg)}}";
+      style.textContent = "@keyframes __isdet_spin{to{transform:rotate(360deg)}}";
       document.head.appendChild(style);
     }
 
@@ -341,10 +429,8 @@
 
   global.IsdetTools = {
     /**
-     * Configura token e inicia o motor de sync.
+     * Configura o SDK e inicia o motor de sync.
      * Chamar uma vez, antes de criar stores.
-     *
-     * IsdetTools.configure({ token: 'seu-token-aqui' })
      */
     configure({ token, syncInterval, apiBase } = {}) {
       if (token) CONFIG.token = token;
@@ -354,8 +440,8 @@
     },
 
     /**
-     * Cria um store isolado para um namespace.
-     * Cada ferramenta usa seu próprio namespace.
+     * Cria um store isolado por namespace.
+     * Use store.collection(name) para acessar coleções.
      */
     createStore,
 
@@ -365,7 +451,7 @@
     mountSyncStatus,
 
     /**
-     * Acesso ao motor de sync (para flush manual, etc.)
+     * Força sincronização imediata da fila pendente.
      */
     sync: () => SyncEngine.flush(),
   };
