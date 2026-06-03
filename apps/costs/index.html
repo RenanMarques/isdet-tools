@@ -110,39 +110,39 @@ tr:hover td{background:var(--bg2)}
   </header>
 
   <div class="tabs">
-    <button class="tab active" onclick="showTab('painel',this)"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Painel</button>
-    <button class="tab" onclick="showTab('insumos',this)"><i class="ti ti-package" aria-hidden="true"></i> Insumos</button>
-    <button class="tab" onclick="showTab('sessoes',this)"><i class="ti ti-flask" aria-hidden="true"></i> Sessões</button>
-    <button class="tab" onclick="showTab('custo-peca',this)"><i class="ti ti-calculator" aria-hidden="true"></i> Custo/peça</button>
+    <button class="tab active" onclick="showTab('dashboard',this)"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Painel</button>
+    <button class="tab" onclick="showTab('supplies',this)"><i class="ti ti-package" aria-hidden="true"></i> Insumos</button>
+    <button class="tab" onclick="showTab('sessions',this)"><i class="ti ti-flask" aria-hidden="true"></i> Sessões</button>
+    <button class="tab" onclick="showTab('unit-cost',this)"><i class="ti ti-calculator" aria-hidden="true"></i> Custo/peça</button>
   </div>
 
   <!-- PAINEL -->
-  <div id="panel-painel" class="panel active">
+  <div id="panel-dashboard" class="panel active">
     <div class="metric-grid" id="metrics-grid"></div>
     <div class="two-col">
       <div class="card">
         <div class="section-label">Últimas sessões</div>
-        <div id="dash-sessoes"></div>
+        <div id="dash-sessions"></div>
       </div>
       <div class="card">
         <div class="section-label">Insumos com estoque crítico</div>
-        <div id="dash-estoque"></div>
+        <div id="dash-stock"></div>
       </div>
     </div>
     <div class="card">
       <div class="section-label">Custo total por técnica</div>
-      <div id="dash-tecnica"></div>
+      <div id="dash-technique"></div>
     </div>
   </div>
 
   <!-- INSUMOS -->
-  <div id="panel-insumos" class="panel">
+  <div id="panel-supplies" class="panel">
     <div class="card">
       <div class="section-label">Cadastrar insumo</div>
       <div class="two-col">
-        <div class="field-row"><label>Nome do insumo</label><input id="ins-nome" placeholder="ex: Papel sublimático A4 Jojo"></div>
+        <div class="field-row"><label>Nome do insumo</label><input id="ins-name" placeholder="ex: Papel sublimático A4 Jojo"></div>
         <div class="field-row"><label>Técnica</label>
-          <select id="ins-tecnica">
+          <select id="ins-technique">
             <option value="Sublimação">Sublimação</option>
             <option value="DTF">DTF</option>
             <option value="Serigrafia">Serigrafia</option>
@@ -151,25 +151,25 @@ tr:hover td{background:var(--bg2)}
         </div>
       </div>
       <div class="three-col">
-        <div class="field-row"><label>Quantidade comprada</label><input id="ins-qtd" type="number" min="0.001" step="any" placeholder="100"></div>
+        <div class="field-row"><label>Quantidade comprada</label><input id="ins-quantity" type="number" min="0.001" step="any" placeholder="100"></div>
         <div class="field-row"><label>Unidade</label>
-          <select id="ins-unidade">
+          <select id="ins-unit">
             <option>folha</option><option>ml</option><option>g</option><option>unidade</option><option>metro</option><option>cm</option><option>litro</option><option>kg</option>
           </select>
         </div>
-        <div class="field-row"><label>Valor pago (R$)</label><input id="ins-valor" type="number" min="0" step="any" placeholder="45.00"></div>
+        <div class="field-row"><label>Valor pago (R$)</label><input id="ins-price" type="number" min="0" step="any" placeholder="45.00"></div>
       </div>
       <div class="two-col">
-        <div class="field-row"><label>Estoque atual</label><input id="ins-estoque" type="number" min="0" step="any" placeholder="igual à qty comprada"></div>
-        <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-alerta" type="number" min="0" step="any" placeholder="10"></div>
+        <div class="field-row"><label>Estoque atual</label><input id="ins-stock" type="number" min="0" step="any" placeholder="igual à qty comprada"></div>
+        <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-min-stock" type="number" min="0" step="any" placeholder="10"></div>
       </div>
-      <div class="field-row"><label>Notas</label><textarea id="ins-notas" placeholder="marca, fornecedor, observações..."></textarea></div>
-      <button class="btn primary" onclick="salvarInsumo()"><i class="ti ti-plus" aria-hidden="true"></i> Cadastrar insumo</button>
+      <div class="field-row"><label>Notas</label><textarea id="ins-notes" placeholder="marca, fornecedor, observações..."></textarea></div>
+      <button class="btn primary" onclick="saveSupply()"><i class="ti ti-plus" aria-hidden="true"></i> Cadastrar insumo</button>
     </div>
     <div class="card">
       <div class="section-label">Insumos cadastrados</div>
       <div class="table-wrap">
-        <table id="tabela-insumos">
+        <table id="table-supplies">
           <thead><tr><th>Nome</th><th>Técnica</th><th>Custo unitário</th><th>Estoque</th><th>Status</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
@@ -178,49 +178,49 @@ tr:hover td{background:var(--bg2)}
   </div>
 
   <!-- SESSÕES -->
-  <div id="panel-sessoes" class="panel">
+  <div id="panel-sessions" class="panel">
     <div class="card">
       <div class="section-label">Registrar sessão de teste</div>
       <div class="three-col">
-        <div class="field-row"><label>Data</label><input id="ses-data" type="date"></div>
+        <div class="field-row"><label>Data</label><input id="ses-date" type="date"></div>
         <div class="field-row"><label>Técnica</label>
-          <select id="ses-tecnica" onchange="renderInsumosSessao()">
+          <select id="ses-technique" onchange="renderSessionSupplies()">
             <option value="Sublimação">Sublimação</option>
             <option value="DTF">DTF</option>
             <option value="Serigrafia">Serigrafia</option>
           </select>
         </div>
         <div class="field-row"><label>Substrato</label>
-          <select id="ses-substrato">
+          <select id="ses-substrate">
             <option>Caneca cerâmica</option><option>Caneca polímero</option><option>Camiseta poliéster</option><option>Placa MDF</option><option>Camiseta algodão</option><option>Retalho algodão</option><option>Outro</option>
           </select>
         </div>
       </div>
       <div class="two-col">
-        <div class="field-row"><label>Peças produzidas</label><input id="ses-pecas" type="number" min="0" step="1" placeholder="1"></div>
-        <div class="field-row"><label>Peças aprovadas</label><input id="ses-ok" type="number" min="0" step="1" placeholder="1"></div>
+        <div class="field-row"><label>Peças produzidas</label><input id="ses-pieces" type="number" min="0" step="1" placeholder="1"></div>
+        <div class="field-row"><label>Peças aprovadas</label><input id="ses-approved" type="number" min="0" step="1" placeholder="1"></div>
       </div>
       <div class="section-label" style="margin-top:.5rem">Insumos usados nesta sessão</div>
-      <div id="insumos-sessao-wrap"></div>
+      <div id="session-supplies-wrap"></div>
       <div class="field-row" style="margin-top:.75rem"><label>Parâmetros testados</label><textarea id="ses-params" placeholder="ex: 200°C × 40s, pressão média — tela 77 fios, rodo 60sh"></textarea></div>
       <div class="two-col">
-        <div class="field-row"><label>Resultado (0–10)</label><input id="ses-nota" type="number" min="0" max="10" step="0.5" placeholder="7"></div>
+        <div class="field-row"><label>Resultado (0–10)</label><input id="ses-score" type="number" min="0" max="10" step="0.5" placeholder="7"></div>
         <div class="field-row"><label>Status</label>
           <select id="ses-status">
-            <option value="teste">Em teste</option>
-            <option value="validado">Validado</option>
-            <option value="falhou">Falhou</option>
+            <option value="testing">Em teste</option>
+            <option value="validated">Validado</option>
+            <option value="failed">Falhou</option>
           </select>
         </div>
       </div>
-      <div class="field-row"><label>O que funcionou / O que falhou / Próximo ajuste</label><textarea id="ses-obs" placeholder="registro qualitativo da sessão..."></textarea></div>
-      <button class="btn primary" onclick="salvarSessao()"><i class="ti ti-plus" aria-hidden="true"></i> Registrar sessão</button>
+      <div class="field-row"><label>O que funcionou / O que falhou / Próximo ajuste</label><textarea id="ses-observations" placeholder="registro qualitativo da sessão..."></textarea></div>
+      <button class="btn primary" onclick="saveSession()"><i class="ti ti-plus" aria-hidden="true"></i> Registrar sessão</button>
     </div>
     <div class="card">
       <div class="section-label">Histórico de sessões</div>
-      <div class="chip-row" id="filtros-sessao" style="margin-bottom:.75rem"></div>
+      <div class="chip-row" id="session-filters" style="margin-bottom:.75rem"></div>
       <div class="table-wrap">
-        <table id="tabela-sessoes">
+        <table id="table-sessions">
           <thead><tr><th>Data</th><th>Técnica</th><th>Substrato</th><th>Peças</th><th>Aprovadas</th><th>Custo sessão</th><th>Nota</th><th>Status</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
@@ -229,11 +229,11 @@ tr:hover td{background:var(--bg2)}
   </div>
 
   <!-- CUSTO/PEÇA -->
-  <div id="panel-custo-peca" class="panel">
+  <div id="panel-unit-cost" class="panel">
     <div class="alert alert-info">Sessões com status "Validado" alimentam este painel.</div>
     <div class="two-col" style="margin-bottom:1rem">
       <div class="field-row"><label>Técnica</label>
-        <select id="cp-tecnica" onchange="renderCustoPeca()">
+        <select id="cp-technique" onchange="renderUnitCost()">
           <option value="">— todas —</option>
           <option value="Sublimação">Sublimação</option>
           <option value="DTF">DTF</option>
@@ -241,13 +241,13 @@ tr:hover td{background:var(--bg2)}
         </select>
       </div>
       <div class="field-row"><label>Substrato</label>
-        <select id="cp-substrato" onchange="renderCustoPeca()">
+        <select id="cp-substrate" onchange="renderUnitCost()">
           <option value="">— todos —</option>
           <option>Caneca cerâmica</option><option>Caneca polímero</option><option>Camiseta poliéster</option><option>Placa MDF</option><option>Camiseta algodão</option><option>Retalho algodão</option>
         </select>
       </div>
     </div>
-    <div id="custo-peca-resultado"></div>
+    <div id="unit-cost-result"></div>
     <div class="card" style="margin-top:1rem">
       <div class="section-label">Simulação de preço de venda</div>
       <div class="three-col">
@@ -255,7 +255,7 @@ tr:hover td{background:var(--bg2)}
         <div class="field-row"><label>Margem desejada (%)</label><input id="sim-margem" type="number" value="60" min="0" max="500" step="1"></div>
         <div class="field-row"><label>Outros custos (R$)</label><input id="sim-outros" type="number" value="0" step="any" placeholder="embalagem, frete..."></div>
       </div>
-      <button class="btn" onclick="calcularPreco()"><i class="ti ti-calculator" aria-hidden="true"></i> Calcular sugestão de preço</button>
+      <button class="btn" onclick="calculatePrice()"><i class="ti ti-calculator" aria-hidden="true"></i> Calcular sugestão de preço</button>
       <div id="sim-resultado" style="margin-top:.75rem"></div>
     </div>
   </div>
@@ -266,276 +266,277 @@ tr:hover td{background:var(--bg2)}
 <script src="/shared/isdetart-sdk.js"></script>
 
 <script>
-// ─── Inicialização do SDK ────────────────────────────────────────────────────
+// ─── SDK init ────────────────────────────────────────────────────────────────
 // No browser: Cloudflare Access handles auth transparently (no token needed).
 // For programmatic access (e.g. Claude.ai): call configure({ token: "..." }) manually.
 IsdetTools.configure({});
 IsdetTools.mountSyncStatus(document.getElementById("sync-indicator"));
 
-const store       = IsdetTools.createStore("custos");
-const insumos_col = store.collection("insumos");
-const sessoes_col = store.collection("sessoes");
+const store       = IsdetTools.createStore("costs");
+const suppliesCol = store.collection("supplies");
+const sessionsCol = store.collection("sessions");
 
-// ─── Estado em memória ───────────────────────────────────────────────────────
-let insumos = [], sessoes = [], filtroTecnica = "";
+// ─── In-memory state ─────────────────────────────────────────────────────────
+let supplies = [], sessions = [], techniqueFilter = "";
 
 async function load() {
-  insumos = await insumos_col.findAll();
-  sessoes = await sessoes_col.findAll();
+  supplies = await suppliesCol.findAll();
+  sessions = await sessionsCol.findAll();
   renderAll();
 }
 
 function renderAll() {
-  renderTabelaInsumos();
-  renderTabelaSessoes();
+  renderSuppliesTable();
+  renderSessionsTable();
   renderDashboard();
-  renderFiltros();
-  renderCustoPeca();
+  renderFilters();
+  renderUnitCost();
 }
 
-// ─── Utilitários ─────────────────────────────────────────────────────────────
+// ─── Utilities ────────────────────────────────────────────────────────────────
 function fmt(n)       { return "R$ " + Number(n).toFixed(2).replace(".", ","); }
 function fmtN(n, d=2) { return Number(n).toFixed(d).replace(".", ","); }
-function custoPorUnidade(i) { return i.qtd > 0 ? i.valor / i.qtd : 0; }
+function costPerUnit(i) { return i.quantity > 0 ? i.price / i.quantity : 0; }
 
 function showTab(id, btn) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-" + id).classList.add("active");
   btn.classList.add("active");
-  if (id === "sessoes") renderInsumosSessao();
-  if (id === "custo-peca") renderCustoPeca();
+  if (id === "sessions") renderSessionSupplies();
+  if (id === "unit-cost") renderUnitCost();
 }
 
-// ─── Insumos ──────────────────────────────────────────────────────────────────
-async function salvarInsumo() {
-  const nome = document.getElementById("ins-nome").value.trim();
-  if (!nome) { alert("Informe o nome do insumo."); return; }
-  const qtd    = parseFloat(document.getElementById("ins-qtd").value) || 0;
-  const valor  = parseFloat(document.getElementById("ins-valor").value) || 0;
-  const raw    = parseFloat(document.getElementById("ins-estoque").value);
-  const alerta = parseFloat(document.getElementById("ins-alerta").value) || 0;
-  const novo = {
+// ─── Supplies ─────────────────────────────────────────────────────────────────
+async function saveSupply() {
+  const name = document.getElementById("ins-name").value.trim();
+  if (!name) { alert("Informe o nome do insumo."); return; }
+  const quantity = parseFloat(document.getElementById("ins-quantity").value) || 0;
+  const price    = parseFloat(document.getElementById("ins-price").value) || 0;
+  const raw      = parseFloat(document.getElementById("ins-stock").value);
+  const minStock = parseFloat(document.getElementById("ins-min-stock").value) || 0;
+  const record = {
     id: Date.now(),
-    nome,
-    tecnica:  document.getElementById("ins-tecnica").value,
-    unidade:  document.getElementById("ins-unidade").value,
-    qtd, valor,
-    estoque: isNaN(raw) ? qtd : raw,
-    alerta,
-    notas: document.getElementById("ins-notas").value.trim(),
+    name,
+    technique: document.getElementById("ins-technique").value,
+    unit:      document.getElementById("ins-unit").value,
+    quantity, price,
+    stock: isNaN(raw) ? quantity : raw,
+    minStock,
+    notes: document.getElementById("ins-notes").value.trim(),
   };
-  insumos.push(novo);
-  await insumos_col.save(novo);
-  renderAll(); renderInsumosSessao();
-  ["ins-nome","ins-qtd","ins-valor","ins-estoque","ins-alerta","ins-notas"]
+  supplies.push(record);
+  await suppliesCol.save(record);
+  renderAll(); renderSessionSupplies();
+  ["ins-name","ins-quantity","ins-price","ins-stock","ins-min-stock","ins-notes"]
     .forEach(id => document.getElementById(id).value = "");
 }
 
-async function removerInsumo(id) {
+async function removeSupply(id) {
   if (!confirm("Remover insumo?")) return;
-  insumos = insumos.filter(i => i.id !== id);
-  await insumos_col.remove(id);
-  renderAll(); renderInsumosSessao();
+  supplies = supplies.filter(i => i.id !== id);
+  await suppliesCol.remove(id);
+  renderAll(); renderSessionSupplies();
 }
 
-function renderTabelaInsumos() {
-  const tb = document.querySelector("#tabela-insumos tbody");
-  if (!insumos.length) {
+function renderSuppliesTable() {
+  const tb = document.querySelector("#table-supplies tbody");
+  if (!supplies.length) {
     tb.innerHTML = '<tr><td colspan="6" class="empty">Nenhum insumo cadastrado ainda.</td></tr>';
     return;
   }
-  tb.innerHTML = insumos.map(i => {
-    const cu    = custoPorUnidade(i);
-    const baixo = i.alerta > 0 && i.estoque <= i.alerta;
-    const st    = baixo
+  tb.innerHTML = supplies.map(i => {
+    const cu       = costPerUnit(i);
+    const isLow    = i.minStock > 0 && i.stock <= i.minStock;
+    const st       = isLow
       ? '<span class="badge badge-danger">Baixo</span>'
       : '<span class="badge badge-green">OK</span>';
     return `<tr>
-      <td><strong>${i.nome}</strong>${i.notas ? `<br><span style="color:var(--text3);font-size:11px">${i.notas}</span>` : ""}</td>
-      <td><span class="badge badge-gray">${i.tecnica}</span></td>
-      <td style="font-variant-numeric:tabular-nums">${fmt(cu)}/${i.unidade}</td>
-      <td>${fmtN(i.estoque, 1)} ${i.unidade}</td>
+      <td><strong>${i.name}</strong>${i.notes ? `<br><span style="color:var(--text3);font-size:11px">${i.notes}</span>` : ""}</td>
+      <td><span class="badge badge-gray">${i.technique}</span></td>
+      <td style="font-variant-numeric:tabular-nums">${fmt(cu)}/${i.unit}</td>
+      <td>${fmtN(i.stock, 1)} ${i.unit}</td>
       <td>${st}</td>
-      <td><button class="btn small danger-btn" onclick="removerInsumo(${i.id})"><i class="ti ti-trash" aria-hidden="true"></i></button></td>
+      <td><button class="btn small danger-btn" onclick="removeSupply(${i.id})"><i class="ti ti-trash" aria-hidden="true"></i></button></td>
     </tr>`;
   }).join("");
 }
 
-// ─── Sessões ──────────────────────────────────────────────────────────────────
-function renderInsumosSessao() {
-  const tec = document.getElementById("ses-tecnica").value;
-  const rel  = insumos.filter(i => i.tecnica === tec || i.tecnica === "Geral");
-  const wrap = document.getElementById("insumos-sessao-wrap");
-  if (!rel.length) {
+// ─── Sessions ─────────────────────────────────────────────────────────────────
+function renderSessionSupplies() {
+  const tec      = document.getElementById("ses-technique").value;
+  const relevant = supplies.filter(i => i.technique === tec || i.technique === "Geral");
+  const wrap     = document.getElementById("session-supplies-wrap");
+  if (!relevant.length) {
     wrap.innerHTML = '<div style="color:var(--text3);font-size:12px;margin-bottom:.5rem">Nenhum insumo cadastrado para essa técnica.</div>';
     return;
   }
-  wrap.innerHTML = rel.map(i => `
+  wrap.innerHTML = relevant.map(i => `
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-      <span style="flex:1;font-size:12px">${i.nome}</span>
+      <span style="flex:1;font-size:12px">${i.name}</span>
       <input type="number" min="0" step="any" placeholder="0"
         style="width:80px;font-size:12px;padding:5px 8px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);outline:none"
-        id="ses-ins-${i.id}">
-      <span style="font-size:11px;color:var(--text3);width:40px">${i.unidade}</span>
-      <span style="font-size:11px;color:var(--text3);width:70px" id="ses-ins-val-${i.id}">R$ 0,00</span>
+        id="ses-supply-${i.id}">
+      <span style="font-size:11px;color:var(--text3);width:40px">${i.unit}</span>
+      <span style="font-size:11px;color:var(--text3);width:70px" id="ses-supply-val-${i.id}">R$ 0,00</span>
     </div>`).join("");
-  rel.forEach(i => {
-    const el = document.getElementById("ses-ins-" + i.id);
+  relevant.forEach(i => {
+    const el = document.getElementById("ses-supply-" + i.id);
     if (el) el.addEventListener("input", () => {
-      const v = document.getElementById("ses-ins-val-" + i.id);
-      if (v) v.textContent = fmt((parseFloat(el.value) || 0) * custoPorUnidade(i));
+      const v = document.getElementById("ses-supply-val-" + i.id);
+      if (v) v.textContent = fmt((parseFloat(el.value) || 0) * costPerUnit(i));
     });
   });
 }
 
-async function salvarSessao() {
-  const data = document.getElementById("ses-data").value;
-  if (!data) { alert("Informe a data da sessão."); return; }
-  const tec  = document.getElementById("ses-tecnica").value;
-  const rel  = insumos.filter(i => i.tecnica === tec || i.tecnica === "Geral");
-  const usados = [];
-  const insumosAfetados = [];
-  let custoTotal = 0;
-  rel.forEach(i => {
-    const el = document.getElementById("ses-ins-" + i.id);
+async function saveSession() {
+  const date = document.getElementById("ses-date").value;
+  if (!date) { alert("Informe a data da sessão."); return; }
+  const tec      = document.getElementById("ses-technique").value;
+  const relevant = supplies.filter(i => i.technique === tec || i.technique === "Geral");
+  const used     = [];
+  const affectedSupplies = [];
+  let totalCost  = 0;
+  relevant.forEach(i => {
+    const el = document.getElementById("ses-supply-" + i.id);
     const q  = el ? parseFloat(el.value) || 0 : 0;
     if (q > 0) {
-      const sub = q * custoPorUnidade(i);
-      usados.push({ insId: i.id, nome: i.nome, unidade: i.unidade, qty: q, custo: sub });
-      custoTotal += sub;
-      i.estoque = Math.max(0, i.estoque - q);
-      insumosAfetados.push(i);
+      const sub = q * costPerUnit(i);
+      used.push({ supplyId: i.id, name: i.name, unit: i.unit, quantity: q, cost: sub });
+      totalCost += sub;
+      i.stock = Math.max(0, i.stock - q);
+      affectedSupplies.push(i);
     }
   });
-  const pecas = parseFloat(document.getElementById("ses-pecas").value) || 1;
-  const ok    = parseFloat(document.getElementById("ses-ok").value) || 0;
-  const novaSessao = {
-    id: Date.now(), data, tecnica: tec,
-    substrato:    document.getElementById("ses-substrato").value,
-    pecas, ok,
-    aproveitamento: pecas > 0 ? ok / pecas : 0,
-    params:  document.getElementById("ses-params").value.trim(),
-    nota:    parseFloat(document.getElementById("ses-nota").value) || null,
-    status:  document.getElementById("ses-status").value,
-    obs:     document.getElementById("ses-obs").value.trim(),
-    insumos: usados, custoTotal,
-    custoPorPecaOk: ok > 0 ? custoTotal / ok : null,
+  const pieces   = parseFloat(document.getElementById("ses-pieces").value) || 1;
+  const approved = parseFloat(document.getElementById("ses-approved").value) || 0;
+  const newSession = {
+    id: Date.now(), date, technique: tec,
+    substrate:        document.getElementById("ses-substrate").value,
+    pieces, approved,
+    yieldRate:        pieces > 0 ? approved / pieces : 0,
+    params:           document.getElementById("ses-params").value.trim(),
+    score:            parseFloat(document.getElementById("ses-score").value) || null,
+    status:           document.getElementById("ses-status").value,
+    observations:     document.getElementById("ses-observations").value.trim(),
+    supplies: used, totalCost,
+    costPerApproved: approved > 0 ? totalCost / approved : null,
   };
-  for (const i of insumosAfetados) {
-    await insumos_col.save(i);
+  for (const i of affectedSupplies) {
+    await suppliesCol.save(i);
   }
-  sessoes.push(novaSessao);
-  await sessoes_col.save(novaSessao);
-  renderAll(); renderInsumosSessao();
-  ["ses-data","ses-pecas","ses-ok","ses-params","ses-nota","ses-obs"]
+  sessions.push(newSession);
+  await sessionsCol.save(newSession);
+  renderAll(); renderSessionSupplies();
+  ["ses-date","ses-pieces","ses-approved","ses-params","ses-score","ses-observations"]
     .forEach(id => document.getElementById(id).value = "");
-  document.getElementById("ses-status").value = "teste";
+  document.getElementById("ses-status").value = "testing";
 }
 
-async function removerSessao(id) {
+async function removeSession(id) {
   if (!confirm("Remover sessão?")) return;
-  sessoes = sessoes.filter(s => s.id !== id);
-  await sessoes_col.remove(id);
+  sessions = sessions.filter(s => s.id !== id);
+  await sessionsCol.remove(id);
   renderAll();
 }
 
-function verSessao(id) {
-  const s = sessoes.find(x => x.id === id);
+function viewSession(id) {
+  const s = sessions.find(x => x.id === id);
   if (!s) return;
-  let msg = `📅 ${s.data} — ${s.tecnica} / ${s.substrato}\n`;
-  msg += `Peças: ${s.pecas} produzidas, ${s.ok} aprovadas (${Math.round(s.aproveitamento * 100)}%)\n`;
-  msg += `Custo sessão: ${fmt(s.custoTotal)}\n`;
-  if (s.custoPorPecaOk) msg += `Custo/peça aprovada: ${fmt(s.custoPorPecaOk)}\n`;
+  let msg = `📅 ${s.date} — ${s.technique} / ${s.substrate}\n`;
+  msg += `Peças: ${s.pieces} produzidas, ${s.approved} aprovadas (${Math.round(s.yieldRate * 100)}%)\n`;
+  msg += `Custo sessão: ${fmt(s.totalCost)}\n`;
+  if (s.costPerApproved) msg += `Custo/peça aprovada: ${fmt(s.costPerApproved)}\n`;
   if (s.params) msg += `\nParâmetros: ${s.params}\n`;
-  if (s.obs) msg += `\nObservações: ${s.obs}\n`;
-  if (s.insumos?.length) {
+  if (s.observations) msg += `\nObservações: ${s.observations}\n`;
+  if (s.supplies?.length) {
     msg += "\nInsumos usados:\n";
-    s.insumos.forEach(i => { msg += `  • ${i.nome}: ${i.qty} ${i.unidade} = ${fmt(i.custo)}\n`; });
+    s.supplies.forEach(i => { msg += `  • ${i.name}: ${i.quantity} ${i.unit} = ${fmt(i.cost)}\n`; });
   }
   alert(msg);
 }
 
-function setFiltro(v) { filtroTecnica = v; renderFiltros(); renderTabelaSessoes(); }
+function setFilter(v) { techniqueFilter = v; renderFilters(); renderSessionsTable(); }
 
-function renderFiltros() {
-  const wrap = document.getElementById("filtros-sessao");
+function renderFilters() {
+  const wrap = document.getElementById("session-filters");
+  wrap.innerHTML = "";
   ["","Sublimação","DTF","Serigrafia"].forEach(v => {
     const label = v || "Todas";
-    const sel   = filtroTecnica === v;
+    const sel   = techniqueFilter === v;
     const chip  = document.createElement("span");
     chip.className = "chip" + (sel ? " sel" : "");
     chip.textContent = label;
-    chip.onclick = () => setFiltro(v);
+    chip.onclick = () => setFilter(v);
     wrap.appendChild(chip);
   });
 }
 
-function renderTabelaSessoes() {
-  const tb   = document.querySelector("#tabela-sessoes tbody");
-  const lista = filtroTecnica ? sessoes.filter(s => s.tecnica === filtroTecnica) : sessoes;
-  const sorted = [...lista].sort((a, b) => b.data.localeCompare(a.data));
+function renderSessionsTable() {
+  const tb     = document.querySelector("#table-sessions tbody");
+  const list   = techniqueFilter ? sessions.filter(s => s.technique === techniqueFilter) : sessions;
+  const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
   if (!sorted.length) {
     tb.innerHTML = '<tr><td colspan="9" class="empty">Nenhuma sessão registrada ainda.</td></tr>';
     return;
   }
   const stLabel = {
-    teste:    '<span class="badge badge-gray">Em teste</span>',
-    validado: '<span class="badge badge-green">Validado</span>',
-    falhou:   '<span class="badge badge-danger">Falhou</span>',
+    testing:   '<span class="badge badge-gray">Em teste</span>',
+    validated: '<span class="badge badge-green">Validado</span>',
+    failed:    '<span class="badge badge-danger">Falhou</span>',
   };
   tb.innerHTML = sorted.map(s => `<tr>
-    <td style="white-space:nowrap">${s.data}</td>
-    <td><span class="badge badge-orange">${s.tecnica}</span></td>
-    <td>${s.substrato}</td>
-    <td>${s.pecas}</td>
-    <td>${s.ok} <span style="color:var(--text3);font-size:11px">(${Math.round(s.aproveitamento * 100)}%)</span></td>
-    <td style="font-variant-numeric:tabular-nums">${fmt(s.custoTotal)}</td>
-    <td>${s.nota !== null ? s.nota + "★" : "—"}</td>
+    <td style="white-space:nowrap">${s.date}</td>
+    <td><span class="badge badge-orange">${s.technique}</span></td>
+    <td>${s.substrate}</td>
+    <td>${s.pieces}</td>
+    <td>${s.approved} <span style="color:var(--text3);font-size:11px">(${Math.round(s.yieldRate * 100)}%)</span></td>
+    <td style="font-variant-numeric:tabular-nums">${fmt(s.totalCost)}</td>
+    <td>${s.score !== null ? s.score + "★" : "—"}</td>
     <td>${stLabel[s.status] || ""}</td>
     <td style="white-space:nowrap">
-      <button class="btn small" onclick="verSessao(${s.id})" title="Detalhes"><i class="ti ti-eye" aria-hidden="true"></i></button>
-      <button class="btn small danger-btn" onclick="removerSessao(${s.id})"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      <button class="btn small" onclick="viewSession(${s.id})" title="Detalhes"><i class="ti ti-eye" aria-hidden="true"></i></button>
+      <button class="btn small danger-btn" onclick="removeSession(${s.id})"><i class="ti ti-trash" aria-hidden="true"></i></button>
     </td>
   </tr>`).join("");
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 function renderDashboard() {
-  const totalGasto = sessoes.reduce((a, b) => a + b.custoTotal, 0);
-  const totalPecas = sessoes.reduce((a, b) => a + b.ok, 0);
-  const media      = totalPecas > 0 ? totalGasto / totalPecas : 0;
+  const totalSpent  = sessions.reduce((a, b) => a + b.totalCost, 0);
+  const totalPieces = sessions.reduce((a, b) => a + b.approved, 0);
+  const average     = totalPieces > 0 ? totalSpent / totalPieces : 0;
   document.getElementById("metrics-grid").innerHTML = `
-    <div class="metric"><div class="metric-label">Total investido</div><div class="metric-value">${fmt(totalGasto)}</div><div class="metric-sub">em ${sessoes.length} sessão(ões)</div></div>
-    <div class="metric"><div class="metric-label">Peças aprovadas</div><div class="metric-value">${totalPecas}</div></div>
-    <div class="metric"><div class="metric-label">Custo médio/peça</div><div class="metric-value">${fmt(media)}</div><div class="metric-sub">aprovada</div></div>
-    <div class="metric"><div class="metric-label">Insumos</div><div class="metric-value">${insumos.length}</div><div class="metric-sub">cadastrados</div></div>
+    <div class="metric"><div class="metric-label">Total investido</div><div class="metric-value">${fmt(totalSpent)}</div><div class="metric-sub">em ${sessions.length} sessão(ões)</div></div>
+    <div class="metric"><div class="metric-label">Peças aprovadas</div><div class="metric-value">${totalPieces}</div></div>
+    <div class="metric"><div class="metric-label">Custo médio/peça</div><div class="metric-value">${fmt(average)}</div><div class="metric-sub">aprovada</div></div>
+    <div class="metric"><div class="metric-label">Insumos</div><div class="metric-value">${supplies.length}</div><div class="metric-sub">cadastrados</div></div>
   `;
 
-  const ult = [...sessoes].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 4);
-  document.getElementById("dash-sessoes").innerHTML = ult.length
-    ? ult.map(s => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border)">
-        <span style="font-size:12px">${s.data} — ${s.tecnica}</span>
-        <span style="font-size:12px;color:var(--text2)">${fmt(s.custoTotal)}</span>
+  const recent = [...sessions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+  document.getElementById("dash-sessions").innerHTML = recent.length
+    ? recent.map(s => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border)">
+        <span style="font-size:12px">${s.date} — ${s.technique}</span>
+        <span style="font-size:12px;color:var(--text2)">${fmt(s.totalCost)}</span>
       </div>`).join("")
     : '<div class="empty">Sem sessões ainda.</div>';
 
-  const baixo = insumos.filter(i => i.alerta > 0 && i.estoque <= i.alerta);
-  document.getElementById("dash-estoque").innerHTML = baixo.length
-    ? baixo.map(i => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border)">
-        <span style="font-size:12px">${i.nome}</span>
-        <span style="font-size:12px;color:var(--danger-text)">${fmtN(i.estoque, 1)} ${i.unidade}</span>
+  const lowStock = supplies.filter(i => i.minStock > 0 && i.stock <= i.minStock);
+  document.getElementById("dash-stock").innerHTML = lowStock.length
+    ? lowStock.map(i => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid var(--border)">
+        <span style="font-size:12px">${i.name}</span>
+        <span style="font-size:12px;color:var(--danger-text)">${fmtN(i.stock, 1)} ${i.unit}</span>
       </div>`).join("")
     : '<div style="font-size:12px;color:var(--text3);padding:.5rem 0">Nenhum estoque crítico.</div>';
 
   const rows = ["Sublimação","DTF","Serigrafia"].map(t => {
-    const ss    = sessoes.filter(s => s.tecnica === t);
-    const total = ss.reduce((a, b) => a + b.custoTotal, 0);
-    const ok    = ss.reduce((a, b) => a + b.ok, 0);
+    const ss    = sessions.filter(s => s.technique === t);
+    const total = ss.reduce((a, b) => a + b.totalCost, 0);
+    const ok    = ss.reduce((a, b) => a + b.approved, 0);
     return { t, total, ok, n: ss.length };
   }).filter(r => r.n > 0);
 
-  document.getElementById("dash-tecnica").innerHTML = rows.length
+  document.getElementById("dash-technique").innerHTML = rows.length
     ? `<table><thead><tr><th>Técnica</th><th>Sessões</th><th>Peças OK</th><th>Total gasto</th><th>Custo/peça</th></tr></thead><tbody>
         ${rows.map(r => `<tr>
           <td><span class="badge badge-orange">${r.t}</span></td>
@@ -546,46 +547,46 @@ function renderDashboard() {
     : '<div class="empty">Sem dados por técnica ainda.</div>';
 }
 
-// ─── Custo/peça ───────────────────────────────────────────────────────────────
-function renderCustoPeca() {
-  const tec = document.getElementById("cp-tecnica").value;
-  const sub = document.getElementById("cp-substrato").value;
-  let lista = sessoes.filter(s => s.status === "validado");
-  if (tec) lista = lista.filter(s => s.tecnica === tec);
-  if (sub) lista = lista.filter(s => s.substrato === sub);
-  const el = document.getElementById("custo-peca-resultado");
-  if (!lista.length) {
+// ─── Unit cost ────────────────────────────────────────────────────────────────
+function renderUnitCost() {
+  const tec  = document.getElementById("cp-technique").value;
+  const sub  = document.getElementById("cp-substrate").value;
+  let list   = sessions.filter(s => s.status === "validated");
+  if (tec) list = list.filter(s => s.technique === tec);
+  if (sub) list = list.filter(s => s.substrate === sub);
+  const el   = document.getElementById("unit-cost-result");
+  if (!list.length) {
     el.innerHTML = '<div class="empty">Nenhuma sessão validada para esse filtro ainda.</div>';
     return;
   }
-  const grupos = {};
-  lista.forEach(s => {
-    const k = s.tecnica + "|" + s.substrato;
-    if (!grupos[k]) grupos[k] = { tecnica: s.tecnica, substrato: s.substrato, sessoes: [], custoTotal: 0, pecasOk: 0 };
-    grupos[k].sessoes.push(s);
-    grupos[k].custoTotal += s.custoTotal;
-    grupos[k].pecasOk    += s.ok;
+  const groups = {};
+  list.forEach(s => {
+    const k = s.technique + "|" + s.substrate;
+    if (!groups[k]) groups[k] = { technique: s.technique, substrate: s.substrate, sessions: [], totalCost: 0, approvedPieces: 0 };
+    groups[k].sessions.push(s);
+    groups[k].totalCost     += s.totalCost;
+    groups[k].approvedPieces += s.approved;
   });
-  el.innerHTML = Object.values(grupos).map(g => {
-    const cpk    = g.pecasOk > 0 ? g.custoTotal / g.pecasOk : null;
-    const notas  = g.sessoes.map(s => s.nota).filter(n => n !== null);
-    const media  = notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null;
+  el.innerHTML = Object.values(groups).map(g => {
+    const cpk     = g.approvedPieces > 0 ? g.totalCost / g.approvedPieces : null;
+    const scores  = g.sessions.map(s => s.score).filter(n => n !== null);
+    const average = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
     return `<div class="card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">
-        <div><span class="badge badge-orange" style="margin-right:6px">${g.tecnica}</span><strong>${g.substrato}</strong></div>
-        <span style="font-size:11px;color:var(--text3)">${g.sessoes.length} sessão(ões) validada(s)</span>
+        <div><span class="badge badge-orange" style="margin-right:6px">${g.technique}</span><strong>${g.substrate}</strong></div>
+        <span style="font-size:11px;color:var(--text3)">${g.sessions.length} sessão(ões) validada(s)</span>
       </div>
       <div class="metric-grid">
         <div class="metric"><div class="metric-label">Custo/peça aprovada</div><div class="metric-value" style="font-size:20px">${cpk ? fmt(cpk) : "—"}</div></div>
-        <div class="metric"><div class="metric-label">Total investido</div><div class="metric-value" style="font-size:20px">${fmt(g.custoTotal)}</div></div>
-        <div class="metric"><div class="metric-label">Peças aprovadas</div><div class="metric-value" style="font-size:20px">${g.pecasOk}</div></div>
-        <div class="metric"><div class="metric-label">Nota média</div><div class="metric-value" style="font-size:20px">${media ? fmtN(media, 1) + "★" : "—"}</div></div>
+        <div class="metric"><div class="metric-label">Total investido</div><div class="metric-value" style="font-size:20px">${fmt(g.totalCost)}</div></div>
+        <div class="metric"><div class="metric-label">Peças aprovadas</div><div class="metric-value" style="font-size:20px">${g.approvedPieces}</div></div>
+        <div class="metric"><div class="metric-label">Nota média</div><div class="metric-value" style="font-size:20px">${average ? fmtN(average, 1) + "★" : "—"}</div></div>
       </div>
     </div>`;
   }).join("");
 }
 
-function calcularPreco() {
+function calculatePrice() {
   const custo  = parseFloat(document.getElementById("sim-custo").value) || 0;
   const margem = parseFloat(document.getElementById("sim-margem").value) || 60;
   const outros = parseFloat(document.getElementById("sim-outros").value) || 0;
@@ -602,8 +603,7 @@ function calcularPreco() {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-document.getElementById("ses-data").valueAsDate = new Date();
-document.getElementById("filtros-sessao").innerHTML = "";
+document.getElementById("ses-date").valueAsDate = new Date();
 load();
 </script>
 </body>

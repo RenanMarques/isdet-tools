@@ -51,6 +51,23 @@ D1 — tabela `records(namespace, collection, id, data, created_at, updated_at)`
 
 Sem migração de banco necessária — coleções novas surgem no primeiro `save()`.
 
+## Naming Convention
+
+**All names in code must be English.** Only UI text displayed to the user stays in Portuguese.
+
+This applies to:
+- JavaScript identifiers (variables, functions, constants)
+- HTML element IDs and CSS class names introduced by tools
+- Data object property names (stored as JSON in D1)
+- Stored enum values (e.g. status codes like `"validated"`, `"failed"`)
+- Namespace and collection names passed to the SDK
+- Folder and file names under `apps/`
+
+Does **not** apply to:
+- Visible UI text: labels, button text, placeholders, headings, alert messages
+- Sync status strings rendered by the SDK (`"Sincronizando…"`, etc.)
+
+
 # Instruções para Claude Code
 
 ## Push de commits

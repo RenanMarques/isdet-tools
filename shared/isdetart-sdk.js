@@ -230,7 +230,7 @@
 
   function createCollection(namespace, collectionName) {
     if (!/^[a-zA-Z0-9_-]+$/.test(collectionName)) {
-      throw new Error("collection inválida: use apenas letras, números, - e _");
+      throw new Error("invalid collection: use only letters, numbers, - and _");
     }
 
     function recordKey(id) {
@@ -352,7 +352,7 @@
 
   function createStore(namespace) {
     if (!namespace || !/^[a-zA-Z0-9_-]+$/.test(namespace)) {
-      throw new Error("namespace inválido: use apenas letras, números, - e _");
+      throw new Error("invalid namespace: use only letters, numbers, - and _");
     }
 
     const _collections = {};
