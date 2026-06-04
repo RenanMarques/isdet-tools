@@ -76,6 +76,17 @@ curl -s -X PUT \
   }"
 ```
 
+**4. Sincronizar o branch local com o remoto (obrigatório após push via API):**
+
+Após publicar via API, o branch local tem commits diferentes dos criados pela API.
+Isso faz o hook de fim de sessão reclamar de commits não enviados. Resolver com:
+```bash
+git fetch origin NOME-DA-BRANCH
+git reset --hard origin/NOME-DA-BRANCH
+```
+
+---
+
 **Verificar permissões do token (diagnóstico):**
 ```bash
 curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
