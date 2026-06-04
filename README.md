@@ -2,8 +2,6 @@
 
 Infraestrutura compartilhada para ferramentas pessoais hospedadas em `tools.isdet.net`.
 
-<!-- teste: commit de verificação de capacidade de push -->
-
 ## Estrutura do projeto
 
 ```
