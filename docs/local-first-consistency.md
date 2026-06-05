@@ -69,7 +69,7 @@ garantia     ◄─────────────────────�
 
 ---
 
-### OCC + Dependências causais (abordagem em avaliação)
+### OCC + Dependências causais (abordagem adotada)
 
 Três peças necessárias:
 
@@ -118,9 +118,9 @@ como resolvê-lo — ela conhece a semântica do que "B derivado de A" significa
 
 ---
 
-### Event Sourcing — avaliação pendente
+### Event Sourcing — alternativa futura
 
-> **A discutir antes de decidir a abordagem final.**
+> **Não adotado.** Registrado como referência caso o projeto demande consistência total.
 
 Em vez de armazenar estados ("A = v2"), armazenar eventos ("preço de A foi alterado
 de 100 para 200"). A causalidade fica registrada no log:
@@ -137,12 +137,12 @@ O conflito é **rastreável pelo próprio modelo de dados**, não apenas detect�
 O que a abordagem oferece além do OCC + causalidade:
 - Histórico completo e auditável de toda mutação
 - Possibilidade de re-projetar qualquer estado a partir de um ponto no tempo
-- Conflitos entre eventos concurrent podem ser resolvidos com regras por tipo de evento
-- Pitfalls estruturais do local-first (como o queue snapshot, clock skew e index desync
-  descritos abaixo) ficam cobertos naturalmente pela ordenação do log de eventos
+- Conflitos entre eventos concorrentes podem ser resolvidos com regras por tipo de evento
+- Pitfalls estruturais do local-first (queue snapshot, clock skew, index desync) ficam
+  cobertos naturalmente pela ordenação do log de eventos
 
-O custo: reescrita completa do SDK e das aplicações. A avaliação deve responder
-se os pitfalls que o OCC não cobre justificam essa complexidade.
+O custo é reescrita completa do SDK e das aplicações. Vale considerar se os pitfalls
+que o OCC não cobre se tornarem recorrentes ou críticos na prática.
 
 ---
 
@@ -195,9 +195,6 @@ Não há nenhum alerta para o usuário.
 ### Estado atual e próximos passos
 
 - **Modelo atual:** LWW, sem versionamento de registros, sem detecção de conflito causal
-- **Inclinação atual:** OCC + dependências causais
-- **Decisão aberta:** avaliar se os pitfalls estruturais do local-first (especialmente
-  clock skew, queue snapshot e o flip-flop de background read) justificam considerar
-  Event Sourcing antes de fechar a abordagem
-- **Próxima discussão:** o que Event Sourcing resolveria que OCC não cobre, e se o
-  custo de reescrita é justificado para o contexto de ferramentas internas
+- **Decisão:** adotar OCC + dependências causais
+- **Event Sourcing:** descartado por ora — ver seção acima; reconsiderar se os pitfalls
+  não cobertos pelo OCC se tornarem críticos na prática
