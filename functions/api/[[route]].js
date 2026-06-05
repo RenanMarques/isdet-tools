@@ -2,14 +2,14 @@
  * isdet-tools — Worker Gateway
  * Cloudflare Pages Function (catch-all route)
  *
- * Rotas:
- *   GET    /api/:namespace/:collection        → lista registros da coleção
- *   GET    /api/:namespace/:collection/:id    → lê um registro
- *   PUT    /api/:namespace/:collection/:id    → upsert de um registro
- *   DELETE /api/:namespace/:collection/:id    → remove um registro
+ * Routes:
+ *   GET    /api/:namespace/:collection        → list records from the collection
+ *   GET    /api/:namespace/:collection/:id    → read a record
+ *   PUT    /api/:namespace/:collection/:id    → upsert a record
+ *   DELETE /api/:namespace/:collection/:id    → remove a record
  *
  * Auth: header "Authorization: Bearer <ISDET_TOOLS_API_TOKEN>"
- *       ou Cloudflare Access JWT
+ *       or Cloudflare Access JWT
  */
 
 const CORS_ORIGIN = "https://tools.isdet.net";
@@ -142,7 +142,7 @@ export async function onRequest(context) {
 
   const method = request.method;
 
-  // GET /api/:namespace/:collection → lista registros
+  // GET /api/:namespace/:collection → list records
   if (method === "GET" && !id) {
     const { results } = await env.DB.prepare(
       "SELECT id, data, created_at, updated_at FROM records WHERE namespace = ? AND collection = ? ORDER BY updated_at DESC"
@@ -161,7 +161,7 @@ export async function onRequest(context) {
     }, 200, request);
   }
 
-  // GET /api/:namespace/:collection/:id → lê registro
+  // GET /api/:namespace/:collection/:id → read records
   if (method === "GET" && id) {
     const row = await env.DB.prepare(
       "SELECT data, created_at, updated_at FROM records WHERE namespace = ? AND collection = ? AND id = ?"

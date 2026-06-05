@@ -1,30 +1,30 @@
 /**
  * isdet-tools SDK  —  isdetart-sdk.js
  *
- * Uso em qualquer ferramenta:
+ * Usage in any tool:
  *
  *   <script src="/shared/isdetart-sdk.js"></script>
  *   <script>
- *     const store = IsdetTools.createStore('minha-ferramenta')
- *     const itens = store.collection('item')
+ *     const store = IsdetTools.createStore('my-tool')
+ *     const items = store.collection('item')
  *
- *     await itens.save({ id: 'abc', nome: 'Exemplo' })
- *     const item  = await itens.find('abc')
- *     const todos = await itens.findAll()
- *     await itens.remove('abc')
+ *     await items.save({ id: 'abc', name: 'Example' })
+ *     const item = await items.find('abc')
+ *     const all  = await items.findAll()
+ *     await items.remove('abc')
  *   </script>
  *
- * O SDK cuida de:
- *   - Storage híbrido: window.storage (claude.ai) → localStorage (navegador)
- *   - Sync automático com o Worker gateway (local-first)
- *   - Fila de operações offline com retry
- *   - Indicador de status de sincronização
+ * The SDK handles:
+ *   - Hybrid storage: window.storage (claude.ai) → localStorage (browser)
+ *   - Automatic sync with the Worker gateway (local-first)
+ *   - Offline operation queue with retry
+ *   - Sync status indicator
  */
 
 (function (global) {
   "use strict";
 
-  // ─── Configuração ────────────────────────────────────────────────────────────
+  // ─── Configuration ───────────────────────────────────────────────────────────
 
   const CONFIG = {
     apiBase: "https://tools.isdet.net/api",
@@ -34,7 +34,7 @@
     maxRetries: 5,
   };
 
-  // ─── Storage local (híbrido) ─────────────────────────────────────────────────
+  // ─── Local storage (hybrid) ──────────────────────────────────────────────────
 
   const LocalStorage = {
     async get(key) {
@@ -78,7 +78,7 @@
     },
   };
 
-  // ─── Cliente HTTP ─────────────────────────────────────────────────────────────
+  // ─── HTTP client ─────────────────────────────────────────────────────────────
 
   const Api = {
     headers() {
@@ -123,7 +123,7 @@
     },
   };
 
-  // ─── Fila de sync pendente ────────────────────────────────────────────────────
+  // ─── Pending sync queue ───────────────────────────────────────────────────────
 
   const QUEUE_KEY = "__isdet_sync_queue__";
 
@@ -159,7 +159,7 @@
     },
   };
 
-  // ─── Motor de sincronização ───────────────────────────────────────────────────
+  // ─── Sync engine ─────────────────────────────────────────────────────────────
 
   const SyncEngine = {
     _status: "idle",
@@ -226,7 +226,7 @@
     },
   };
 
-  // ─── Coleção ──────────────────────────────────────────────────────────────────
+  // ─── Collection ───────────────────────────────────────────────────────────────
 
   function createCollection(namespace, collectionName) {
     if (!/^[a-zA-Z0-9_-]+$/.test(collectionName)) {
@@ -239,7 +239,7 @@
     const indexKey = `__isdet__${namespace}__${collectionName}__$index`;
 
     const col = {
-      // ── índice local ──────────────────────────────────────────────────────────
+      // ── Local index ───────────────────────────────────────────────────────────
 
       async _getIndex() {
         return (await LocalStorage.get(indexKey)) || [];
@@ -258,12 +258,12 @@
         await LocalStorage.set(indexKey, idx.filter((x) => x !== id));
       },
 
-      // ── API pública ───────────────────────────────────────────────────────────
+      // ── Public API ────────────────────────────────────────────────────────────
 
       /**
-       * Salva (insert ou update) um registro.
-       * Se data.id for omitido, gera um UUID automaticamente.
-       * Retorna o objeto salvo com o id usado.
+       * Saves (insert or update) a record.
+       * If data.id is omitted, a UUID is generated automatically.
+       * Returns the saved object with the id used.
        */
       async save(data) {
         const id = data.id != null ? String(data.id) : crypto.randomUUID();
@@ -281,8 +281,8 @@
       },
 
       /**
-       * Busca um registro pelo id. Retorna null se não encontrado.
-       * Verifica versão remota em background sem bloquear.
+       * Finds a record by id. Returns null if not found.
+       * Checks the remote version in background without blocking.
        */
       async find(id) {
         const sid = String(id);
@@ -305,8 +305,8 @@
       },
 
       /**
-       * Retorna todos os registros da coleção (local-first).
-       * Sincroniza com o servidor em background.
+       * Returns all records in the collection (local-first).
+       * Syncs with the server in background.
        */
       async findAll() {
         const idx = await this._getIndex();
@@ -333,7 +333,7 @@
       },
 
       /**
-       * Remove um registro pelo id.
+       * Removes a record by id.
        */
       async remove(id) {
         const sid = String(id);
@@ -348,7 +348,7 @@
     return col;
   }
 
-  // ─── Store por namespace ──────────────────────────────────────────────────────
+  // ─── Store per namespace ──────────────────────────────────────────────────────
 
   function createStore(namespace) {
     if (!namespace || !/^[a-zA-Z0-9_-]+$/.test(namespace)) {
@@ -361,8 +361,8 @@
       namespace,
 
       /**
-       * Retorna (ou cria) a coleção com o nome dado.
-       * Instâncias são memoizadas dentro do store.
+       * Returns (or creates) the collection with the given name.
+       * Instances are memoized within the store.
        */
       collection(name) {
         if (!_collections[name]) {
@@ -372,7 +372,7 @@
       },
 
       /**
-       * Força sincronização imediata da fila pendente.
+       * Forces immediate flush of the pending sync queue.
        */
       sync() {
         return SyncEngine.flush();
@@ -380,7 +380,7 @@
     };
   }
 
-  // ─── Componente de status de sync ────────────────────────────────────────────
+  // ─── Sync status component ───────────────────────────────────────────────────
 
   function mountSyncStatus(el) {
     if (!el) return;
@@ -425,12 +425,12 @@
     render({ status: SyncEngine._status });
   }
 
-  // ─── API pública ──────────────────────────────────────────────────────────────
+  // ─── Public API ───────────────────────────────────────────────────────────────
 
   global.IsdetTools = {
     /**
-     * Configura o SDK e inicia o motor de sync.
-     * Chamar uma vez, antes de criar stores.
+     * Configures the SDK and starts the sync engine.
+     * Call once, before creating stores.
      */
     configure({ token, syncInterval, apiBase } = {}) {
       if (token) CONFIG.token = token;
@@ -440,18 +440,18 @@
     },
 
     /**
-     * Cria um store isolado por namespace.
-     * Use store.collection(name) para acessar coleções.
+     * Creates an isolated store per namespace.
+     * Use store.collection(name) to access collections.
      */
     createStore,
 
     /**
-     * Monta o indicador visual de status de sync.
+     * Mounts the visual sync status indicator.
      */
     mountSyncStatus,
 
     /**
-     * Força sincronização imediata da fila pendente.
+     * Forces immediate flush of the pending sync queue.
      */
     sync: () => SyncEngine.flush(),
   };
