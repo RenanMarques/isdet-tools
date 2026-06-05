@@ -5,11 +5,15 @@
  * Routes:
  *   GET    /api/:namespace/:collection        → list records from the collection
  *   GET    /api/:namespace/:collection/:id    → read a record
- *   PUT    /api/:namespace/:collection/:id    → upsert a record
+ *   PUT    /api/:namespace/:collection/:id    → upsert a record (OCC via If-Match)
  *   DELETE /api/:namespace/:collection/:id    → remove a record
  *
  * Auth: header "Authorization: Bearer <ISDET_TOOLS_API_TOKEN>"
  *       or Cloudflare Access JWT
+ *
+ * OCC headers (PUT):
+ *   If-Match: <version>      — expected current version on server; 409 if mismatch
+ *   X-New-Version: <version> — version to store after successful write
  */
 
 const CORS_ORIGIN = "https://tools.isdet.net";
@@ -31,7 +35,7 @@ function response(body, status = 200, request = null) {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": origin,
       "Access-Control-Allow-Methods": "GET, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, If-Match, X-New-Version",
       "Access-Control-Max-Age": "86400",
     },
   });
@@ -126,6 +130,11 @@ export async function onRequest(context) {
     )
   `);
 
+  // Additive migration: add version column if it doesn't exist yet
+  try {
+    await env.DB.exec("ALTER TABLE records ADD COLUMN version TEXT");
+  } catch {}
+
   const segments = (params.route || []).filter(Boolean);
   const namespace  = segments[0];
   const collection = segments[1];
@@ -145,7 +154,7 @@ export async function onRequest(context) {
   // GET /api/:namespace/:collection → list records
   if (method === "GET" && !id) {
     const { results } = await env.DB.prepare(
-      "SELECT id, data, created_at, updated_at FROM records WHERE namespace = ? AND collection = ? ORDER BY updated_at DESC"
+      "SELECT id, data, created_at, updated_at, version FROM records WHERE namespace = ? AND collection = ? ORDER BY updated_at DESC"
     )
       .bind(namespace, collection)
       .all();
@@ -157,26 +166,33 @@ export async function onRequest(context) {
         data: JSON.parse(r.data),
         created_at: r.created_at,
         updated_at: r.updated_at,
+        version: r.version ?? null,
       })),
     }, 200, request);
   }
 
-  // GET /api/:namespace/:collection/:id → read records
+  // GET /api/:namespace/:collection/:id → read a record
   if (method === "GET" && id) {
     const row = await env.DB.prepare(
-      "SELECT data, created_at, updated_at FROM records WHERE namespace = ? AND collection = ? AND id = ?"
+      "SELECT data, created_at, updated_at, version FROM records WHERE namespace = ? AND collection = ? AND id = ?"
     )
       .bind(namespace, collection, id)
       .first();
     if (!row) return notFound(request);
     return response(
-      { namespace, collection, id, data: JSON.parse(row.data), created_at: row.created_at, updated_at: row.updated_at },
+      {
+        namespace, collection, id,
+        data: JSON.parse(row.data),
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        version: row.version ?? null,
+      },
       200,
       request
     );
   }
 
-  // PUT /api/:namespace/:collection/:id → upsert
+  // PUT /api/:namespace/:collection/:id → upsert with optional OCC
   if (method === "PUT" && id) {
     let body;
     try {
@@ -185,17 +201,37 @@ export async function onRequest(context) {
       return badRequest("invalid JSON body", request);
     }
 
-    const now = Date.now();
-    const serialized = JSON.stringify(body);
+    const expectedVersion = request.headers.get("If-Match") || null;
+    const newVersion      = request.headers.get("X-New-Version") || null;
+    const now             = Date.now();
+    const serialized      = JSON.stringify(body);
+
+    // OCC check: if client declares an expected version, verify it matches the server
+    if (expectedVersion) {
+      const current = await env.DB.prepare(
+        "SELECT version FROM records WHERE namespace = ? AND collection = ? AND id = ?"
+      )
+        .bind(namespace, collection, id)
+        .first();
+
+      if (current && current.version !== expectedVersion) {
+        return response(
+          { error: "conflict", currentVersion: current.version ?? null },
+          409,
+          request
+        );
+      }
+    }
 
     await env.DB.prepare(
-      `INSERT INTO records (namespace, collection, id, data, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO records (namespace, collection, id, data, created_at, updated_at, version)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (namespace, collection, id) DO UPDATE SET
          data       = excluded.data,
-         updated_at = excluded.updated_at`
+         updated_at = excluded.updated_at,
+         version    = excluded.version`
     )
-      .bind(namespace, collection, id, serialized, now, now)
+      .bind(namespace, collection, id, serialized, now, now, newVersion)
       .run();
 
     const row = await env.DB.prepare(
@@ -204,7 +240,11 @@ export async function onRequest(context) {
       .bind(namespace, collection, id)
       .first();
 
-    return response({ ok: true, namespace, collection, id, created_at: row.created_at, updated_at: now }, 200, request);
+    return response(
+      { ok: true, namespace, collection, id, created_at: row.created_at, updated_at: now, version: newVersion },
+      200,
+      request
+    );
   }
 
   // DELETE /api/:namespace/:collection/:id → remove

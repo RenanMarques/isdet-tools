@@ -5,19 +5,34 @@
  *
  *   <script src="/shared/isdet-tools-sdk.js"></script>
  *   <script>
+ *     IsdetTools.configure({
+ *       onConflict({ op, remote }) { ... },       // 409: server version mismatch
+ *       onCausalConflict({ stale, changedDependency }) { ... }, // dep changed before flush
+ *     })
+ *
  *     const store = IsdetTools.createStore('my-tool')
  *     const items = store.collection('item')
  *
  *     await items.save({ id: 'abc', name: 'Example' })
  *     const item = await items.find('abc')
+ *     const { data, version } = await items.findWithMeta('abc')
  *     const all  = await items.findAll()
  *     await items.remove('abc')
+ *
+ *     // Declare causal dependency when deriving one record from another:
+ *     const { data: supply, version: supplyVer } = await supplies.findWithMeta('s1')
+ *     await sessions.save(sessionData, {
+ *       dependsOn: [{ collection: 'supplies', id: 's1', version: supplyVer }]
+ *     })
  *   </script>
  *
  * The SDK handles:
  *   - Hybrid storage: window.storage (claude.ai) → localStorage (browser)
  *   - Automatic sync with the Worker gateway (local-first)
  *   - Offline operation queue with retry
+ *   - OCC: conditional PUT with If-Match; 409 → onConflict callback
+ *   - Causal dependencies: dependsOn checked at flush; stale → onCausalConflict callback
+ *   - Pitfall fix: background reads never overwrite pending local writes
  *   - Sync status indicator
  */
 
@@ -32,6 +47,8 @@
     syncInterval: 30_000,
     retryDelay: 5_000,
     maxRetries: 5,
+    onConflict: null,        // ({ op, remote }) => void
+    onCausalConflict: null,  // ({ stale, changedDependency }) => void
   };
 
   // ─── Local storage (hybrid) ──────────────────────────────────────────────────
@@ -107,12 +124,23 @@
       return r.json();
     },
 
-    async put(namespace, collection, id, data) {
+    async put(namespace, collection, id, data, { expectedVersion, newVersion } = {}) {
+      const h = this.headers();
+      if (expectedVersion) h["If-Match"]      = expectedVersion;
+      if (newVersion)      h["X-New-Version"] = newVersion;
+
       const r = await fetch(`${CONFIG.apiBase}/${namespace}/${collection}/${id}`, {
         method: "PUT",
-        headers: this.headers(),
+        headers: h,
         body: JSON.stringify(data),
       });
+
+      if (r.status === 409) {
+        const err = new Error("conflict");
+        err.isConflict = true;
+        err.remote = await r.json();
+        throw err;
+      }
       if (!r.ok) throw new Error(`API ${r.status}`);
       return r.json();
     },
@@ -163,6 +191,25 @@
     },
   };
 
+  // ─── Causal dependency check ─────────────────────────────────────────────────
+
+  async function checkCausalDeps(op) {
+    for (const dep of op.dependsOn) {
+      const key = `__isdet__${op.namespace}__${dep.collection}__${dep.id}`;
+      const stored = await LocalStorage.get(key);
+      if (stored?._version && stored._version !== dep.version) {
+        return {
+          collection: dep.collection,
+          id: dep.id,
+          declaredVersion: dep.version,
+          currentVersion: stored._version,
+          currentData: stored.data,
+        };
+      }
+    }
+    return null;
+  }
+
   // ─── Sync engine ─────────────────────────────────────────────────────────────
 
   const SyncEngine = {
@@ -170,6 +217,7 @@
     _listeners: [],
     _timer: null,
     _lastSync: null,
+    _conflicts: [],  // unresolved 409s when no onConflict handler is configured
 
     onStatus(fn) {
       this._listeners.push(fn);
@@ -193,20 +241,46 @@
       for (const op of queue) {
         try {
           if (op.type === "save") {
-            await Api.put(op.namespace, op.collection, op.id, op.data);
+            // Check causal dependencies before sending
+            if (op.dependsOn?.length) {
+              const causalConflict = await checkCausalDeps(op);
+              if (causalConflict) {
+                CONFIG.onCausalConflict?.({ stale: op, changedDependency: causalConflict });
+                await Queue.remove(op.namespace, op.collection, op.id);
+                continue;
+              }
+            }
+
+            await Api.put(op.namespace, op.collection, op.id, op.data, {
+              expectedVersion: op.expectedVersion ?? null,
+              newVersion: op.newVersion ?? null,
+            });
           } else if (op.type === "remove") {
             await Api.delete(op.namespace, op.collection, op.id);
           }
           await Queue.remove(op.namespace, op.collection, op.id);
-        } catch {
-          const retries = (op.retries || 0) + 1;
-          if (retries < CONFIG.maxRetries) {
-            failed.push({ ...op, retries });
+        } catch (e) {
+          if (e.isConflict) {
+            // 409 is not a network error — retrying will not help
+            if (CONFIG.onConflict) {
+              CONFIG.onConflict({ op, remote: e.remote });
+            } else {
+              this._conflicts.push({ op, remote: e.remote, detectedAt: Date.now() });
+              console.warn("[IsdetTools] OCC conflict (no onConflict handler):", op.namespace, op.collection, op.id);
+            }
+            await Queue.remove(op.namespace, op.collection, op.id);
+          } else {
+            const retries = (op.retries || 0) + 1;
+            if (retries < CONFIG.maxRetries) {
+              failed.push({ ...op, retries });
+            }
           }
         }
       }
 
-      if (failed.length) {
+      if (this._conflicts.length) {
+        this._emit("conflict", { pending: this._conflicts.length });
+      } else if (failed.length) {
         await Queue.save(failed);
         this._emit("error", { pending: failed.length });
       } else {
@@ -267,18 +341,36 @@
       /**
        * Saves (insert or update) a record.
        * If data.id is omitted, a UUID is generated automatically.
+       * Accepts an optional second argument { dependsOn } to declare causal dependencies.
        * Returns the saved object with the id used.
        */
-      async save(data) {
+      async save(data, { dependsOn } = {}) {
         const id = data.id != null ? String(data.id) : crypto.randomUUID();
         const now = Date.now();
+        const newVersion = crypto.randomUUID();
 
         const existing = await LocalStorage.get(recordKey(id));
         const createdAt = existing?._createdAt ?? now;
+        const expectedVersion = existing?._version ?? null;
 
-        await LocalStorage.set(recordKey(id), { data, _createdAt: createdAt, _updatedAt: now });
+        await LocalStorage.set(recordKey(id), {
+          data,
+          _createdAt: createdAt,
+          _updatedAt: now,
+          _version: newVersion,
+          _dependsOn: dependsOn ?? null,
+        });
         await this._addToIndex(id);
-        await Queue.push({ type: "save", namespace, collection: collectionName, id, data });
+        await Queue.push({
+          type: "save",
+          namespace,
+          collection: collectionName,
+          id,
+          data,
+          expectedVersion,
+          newVersion,
+          dependsOn: dependsOn ?? null,
+        });
         SyncEngine.flush();
 
         return { ...data, id: data.id != null ? data.id : id };
@@ -287,6 +379,7 @@
       /**
        * Finds a record by id. Returns null if not found.
        * Checks the remote version in background without blocking.
+       * Does not overwrite local cache if a write is pending in the queue.
        */
       async find(id) {
         const sid = String(id);
@@ -294,11 +387,22 @@
 
         Api.getOne(namespace, collectionName, sid)
           .then(async (remote) => {
-            if (remote.updated_at > (local?._updatedAt ?? 0)) {
+            const queue = await Queue.load();
+            const hasPending = queue.some(
+              (o) => o.type === "save" &&
+                     o.namespace === namespace &&
+                     o.collection === collectionName &&
+                     o.id === sid
+            );
+            if (hasPending) return;
+
+            if ((remote.updated_at ?? 0) > (local?._updatedAt ?? 0)) {
               await LocalStorage.set(recordKey(sid), {
                 data: remote.data,
                 _createdAt: remote.created_at,
                 _updatedAt: remote.updated_at,
+                _version: remote.version ?? null,
+                _dependsOn: local?._dependsOn ?? null,
               });
               await col._addToIndex(sid);
             }
@@ -309,8 +413,45 @@
       },
 
       /**
+       * Finds a record by id and returns both data and version metadata.
+       * Use when declaring causal dependencies via save(data, { dependsOn }).
+       * Returns null if not found.
+       */
+      async findWithMeta(id) {
+        const sid = String(id);
+        const local = await LocalStorage.get(recordKey(sid));
+
+        Api.getOne(namespace, collectionName, sid)
+          .then(async (remote) => {
+            const queue = await Queue.load();
+            const hasPending = queue.some(
+              (o) => o.type === "save" &&
+                     o.namespace === namespace &&
+                     o.collection === collectionName &&
+                     o.id === sid
+            );
+            if (hasPending) return;
+
+            if ((remote.updated_at ?? 0) > (local?._updatedAt ?? 0)) {
+              await LocalStorage.set(recordKey(sid), {
+                data: remote.data,
+                _createdAt: remote.created_at,
+                _updatedAt: remote.updated_at,
+                _version: remote.version ?? null,
+                _dependsOn: local?._dependsOn ?? null,
+              });
+              await col._addToIndex(sid);
+            }
+          })
+          .catch(() => {});
+
+        return local ? { data: local.data, version: local._version ?? null } : null;
+      },
+
+      /**
        * Returns all records in the collection (local-first).
        * Syncs with the server in background.
+       * Does not overwrite local cache for records with pending writes.
        */
       async findAll() {
         const idx = await this._getIndex();
@@ -319,13 +460,24 @@
 
         Api.getAll(namespace, collectionName)
           .then(async (remote) => {
+            const queue = await Queue.load();
             for (const r of remote.records) {
+              const hasPending = queue.some(
+                (o) => o.type === "save" &&
+                       o.namespace === namespace &&
+                       o.collection === collectionName &&
+                       o.id === r.id
+              );
+              if (hasPending) continue;
+
               const existing = await LocalStorage.get(recordKey(r.id));
-              if (r.updated_at > (existing?._updatedAt ?? 0)) {
+              if ((r.updated_at ?? 0) > (existing?._updatedAt ?? 0)) {
                 await LocalStorage.set(recordKey(r.id), {
                   data: r.data,
                   _createdAt: r.created_at,
                   _updatedAt: r.updated_at,
+                  _version: r.version ?? null,
+                  _dependsOn: existing?._dependsOn ?? null,
                 });
                 await col._addToIndex(r.id);
               }
@@ -390,11 +542,21 @@
     /**
      * Configures the SDK and starts the sync engine.
      * Call once, before creating stores.
+     *
+     * onConflict({ op, remote })
+     *   Called when a PUT returns 409 (server version mismatch).
+     *   The op is removed from the queue — re-save to retry.
+     *
+     * onCausalConflict({ stale, changedDependency })
+     *   Called when a record's declared dependency has changed before flush.
+     *   The op is removed from the queue — re-derive and re-save to retry.
      */
-    configure({ token, syncInterval, apiBase } = {}) {
-      if (token) CONFIG.token = token;
-      if (syncInterval) CONFIG.syncInterval = syncInterval;
-      if (apiBase) CONFIG.apiBase = apiBase;
+    configure({ token, syncInterval, apiBase, onConflict, onCausalConflict } = {}) {
+      if (token)            CONFIG.token = token;
+      if (syncInterval)     CONFIG.syncInterval = syncInterval;
+      if (apiBase)          CONFIG.apiBase = apiBase;
+      if (onConflict)       CONFIG.onConflict = onConflict;
+      if (onCausalConflict) CONFIG.onCausalConflict = onCausalConflict;
       SyncEngine.start();
     },
 

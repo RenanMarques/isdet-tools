@@ -2,8 +2,9 @@
 
 ### Decisões arquiteturais
 
-- [ ] Avaliar Event Sourcing vs OCC + causalidade antes de fechar abordagem — ver `docs/local-first-consistency.md`
-- [ ] Implementar OCC + dependências causais no SDK (versionamento de registros, `dependsOn` no save, `onCausalConflict` no configure)
+- [x] Avaliar Event Sourcing vs OCC + causalidade — decidido: OCC + causalidade (ver `docs/local-first-consistency.md`)
+- [x] Implementar OCC + dependências causais no SDK
+- [ ] **Conflito 409 sem `onConflict` configurado** — atualmente: op removida da fila, adicionada a `SyncEngine._conflicts` (memória), status `"conflict"` emitido, `console.warn`. Problema: ao recarregar a página os conflitos não resolvidos somem. Decidir: (a) dead-letter persistente em localStorage, (b) expor `IsdetTools.getConflicts()`, ou (c) tornar `onConflict` obrigatório no `configure()`
 
 ---
 
