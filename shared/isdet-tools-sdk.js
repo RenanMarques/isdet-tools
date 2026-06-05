@@ -1,9 +1,9 @@
 /**
- * isdet-tools SDK  —  isdetart-sdk.js
+ * IsdetTools SDK
  *
  * Usage in any tool:
  *
- *   <script src="/shared/isdetart-sdk.js"></script>
+ *   <script src="/shared/isdet-tools-sdk.js"></script>
  *   <script>
  *     const store = IsdetTools.createStore('my-tool')
  *     const items = store.collection('item')

@@ -11,7 +11,7 @@ isdet-tools/
 │   └── custos/
 │       └── index.html          ← ferramenta de controle de custos
 ├── shared/
-│   └── isdetart-sdk.js         ← SDK compartilhado (storage, sync, status)
+│   └── isdet-tools-sdk.js         ← SDK compartilhado (storage, sync, status)
 ├── functions/
 │   └── api/
 │       └── [[route]].js        ← Worker gateway (D1, autenticação)
@@ -25,7 +25,7 @@ isdet-tools/
 1. Crie `apps/nome-da-ferramenta/index.html`
 2. Inclua o SDK e inicialize com um namespace único:
    ```html
-   <script src="/shared/isdetart-sdk.js"></script>
+   <script src="/shared/isdet-tools-sdk.js"></script>
    <script>
      IsdetTools.configure({ token: window.__ISDET_TOKEN__ || "" });
      IsdetTools.mountSyncStatus(document.getElementById("sync-status"));

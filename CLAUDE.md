@@ -13,7 +13,7 @@ Ferramentas internas para IsdetCompany hospedadas no Cloudflare Pages. Cada ferr
 
 ```
 apps/<tool>/index.html       UI + lógica da ferramenta
-shared/isdetart-sdk.js       SDK compartilhado (IIFE → window.IsdetTools)
+shared/isdet-tools-sdk.js       SDK compartilhado (IIFE → window.IsdetTools)
 functions/api/[[route]].js   Worker gateway (REST → D1)
 ```
 
@@ -45,7 +45,7 @@ D1 — tabela `records(namespace, collection, id, data, created_at, updated_at)`
 ## Adicionar uma nova ferramenta
 
 1. Criar `apps/<nome>/index.html`
-2. Carregar o SDK: `<script src="/shared/isdetart-sdk.js"></script>`
+2. Carregar o SDK: `<script src="/shared/isdet-tools-sdk.js"></script>`
 3. Inicializar: `IsdetTools.configure({})` e `const store = IsdetTools.createStore('<nome>')`
 4. Usar coleções: `const col = store.collection('<entidade>')` com `save / find / findAll / remove`
 
