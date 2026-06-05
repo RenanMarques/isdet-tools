@@ -36,47 +36,51 @@
 
   // ─── Local storage (hybrid) ──────────────────────────────────────────────────
 
-  const LocalStorage = {
-    async get(key) {
-      try {
-        if (typeof window.storage?.get === "function") {
-          const r = await window.storage.get(key);
-          return r ? JSON.parse(r.value) : null;
-        }
-        const raw = localStorage.getItem(key);
-        return raw ? JSON.parse(raw) : null;
-      } catch {
-        return null;
-      }
-    },
+  const LocalStorage = (() => {
+    const backend = typeof window.storage?.get === "function" ? window.storage : null;
 
-    async set(key, value) {
-      try {
-        const serialized = JSON.stringify(value);
-        if (typeof window.storage?.set === "function") {
-          await window.storage.set(key, serialized);
-        } else {
-          localStorage.setItem(key, serialized);
+    return {
+      async get(key) {
+        try {
+          if (backend) {
+            const r = await backend.get(key);
+            return r ? JSON.parse(r.value) : null;
+          }
+          const raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : null;
+        } catch {
+          return null;
         }
-        return true;
-      } catch {
-        return false;
-      }
-    },
+      },
 
-    async delete(key) {
-      try {
-        if (typeof window.storage?.delete === "function") {
-          await window.storage.delete(key);
-        } else {
-          localStorage.removeItem(key);
+      async set(key, value) {
+        try {
+          const serialized = JSON.stringify(value);
+          if (backend) {
+            await backend.set(key, serialized);
+          } else {
+            localStorage.setItem(key, serialized);
+          }
+          return true;
+        } catch {
+          return false;
         }
-        return true;
-      } catch {
-        return false;
-      }
-    },
-  };
+      },
+
+      async delete(key) {
+        try {
+          if (backend) {
+            await backend.delete(key);
+          } else {
+            localStorage.removeItem(key);
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    };
+  })();
 
   // ─── HTTP client ─────────────────────────────────────────────────────────────
 
