@@ -25,7 +25,7 @@ Rotas do Worker seguem sempre o padrão de 3 segmentos:
 /api/:namespace/:collection/:id
 ```
 
-D1 — tabela `records(namespace, collection, id, data, created_at, updated_at)`.
+D1 — tabela `records(namespace, collection, id, data, created_at, updated_at, version)`.
 `namespace` = ferramenta. `collection` = tipo de entidade. `id` = TEXT (string).
 
 ## Invariantes do SDK
@@ -41,6 +41,18 @@ D1 — tabela `records(namespace, collection, id, data, created_at, updated_at)`
 - `created_at` nunca é sobrescrito no `ON CONFLICT DO UPDATE` — ausente da cláusula UPDATE intencionalmente.
 - Mudanças no schema D1 são **sempre aditivas** (novas tabelas ou colunas). Nunca `DROP TABLE` nem `DROP COLUMN`.
 - Auth aceita Bearer token (`ISDET_TOOLS_API_TOKEN`) **ou** CF Access JWT — ambos válidos; não remover nenhum dos dois caminhos.
+- O Worker **não faz setup de schema**. Nenhum `CREATE TABLE` nem `ALTER TABLE` no código do Worker.
+
+## Migrações D1
+
+Schema é gerenciado exclusivamente via wrangler migrations:
+
+- Arquivos em `migrations/` com nome `NNNN_<desc>.sql` (ex: `0001_initial.sql`)
+- `wrangler.toml` declara `migrations_dir = "migrations"` no binding D1
+- Para aplicar: `wrangler d1 migrations apply isdet-tools-db` (prod) ou `--local` (dev)
+- Wrangler rastreia migrações aplicadas automaticamente via tabela interna `d1_migrations`
+
+Ao adicionar colunas ou tabelas: criar um novo arquivo `NNNN_....sql` — nunca editar migrações já aplicadas.
 
 ## Adicionar uma nova ferramenta
 

@@ -118,23 +118,6 @@ export async function onRequest(context) {
     return unauthorized(request);
   }
 
-  await env.DB.exec(`
-    CREATE TABLE IF NOT EXISTS records (
-      namespace  TEXT    NOT NULL,
-      collection TEXT    NOT NULL,
-      id         TEXT    NOT NULL,
-      data       TEXT    NOT NULL,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      PRIMARY KEY (namespace, collection, id)
-    )
-  `);
-
-  // Additive migration: add version column if it doesn't exist yet
-  try {
-    await env.DB.exec("ALTER TABLE records ADD COLUMN version TEXT");
-  } catch {}
-
   const segments = (params.route || []).filter(Boolean);
   const namespace  = segments[0];
   const collection = segments[1];
