@@ -21,12 +21,13 @@
   }
 
   const states = {
-    idle:     { icon: "ti-clock",          text: "Aguardando sync",  color: "var(--color-text-tertiary)" },
-    syncing:  { icon: "ti-refresh",        text: "Sincronizando…",   color: "var(--color-text-secondary)", spin: true },
-    synced:   { icon: "ti-cloud-check",    text: "Sincronizado",     color: "var(--color-text-success)" },
-    error:    { icon: "ti-cloud-x",        text: "Erro na sync",     color: "var(--color-text-danger)" },
-    conflict: { icon: "ti-alert-triangle", text: "Conflito",         color: "var(--color-text-warning)" },
-    offline:  { icon: "ti-wifi-off",       text: "Offline",          color: "var(--color-text-secondary)" },
+    idle:        { icon: "ti-clock",          text: "Aguardando sync",     color: "var(--color-text-tertiary)" },
+    syncing:     { icon: "ti-refresh",        text: "Sincronizando…",      color: "var(--color-text-secondary)", spin: true },
+    synced:      { icon: "ti-cloud-check",    text: "Sincronizado",        color: "var(--color-text-success)" },
+    error:       { icon: "ti-cloud-x",        text: "Erro na sync",        color: "var(--color-text-danger)" },
+    dead_letter: { icon: "ti-alert-octagon",  text: "Ação necessária",     color: "var(--color-text-danger)" },
+    quota:       { icon: "ti-database-off",   text: "Armazenamento cheio", color: "var(--color-text-danger)" },
+    offline:     { icon: "ti-wifi-off",       text: "Offline",             color: "var(--color-text-secondary)" },
   };
 
   global.IsdetTools.mountSyncStatus = function mountSyncStatus(el) {
@@ -35,10 +36,11 @@
     el.style.cssText =
       "display:inline-flex;align-items:center;gap:5px;font-size:12px;user-select:none";
 
-    function render({ status, pending, lastSync }) {
+    function render({ status, pending, lastSync, count }) {
       const s = states[status] || states.idle;
       let label = s.text;
-      if ((status === "error" || status === "conflict") && pending) label += ` (${pending})`;
+      if (status === "error" && pending) label += ` (${pending})`;
+      if (status === "dead_letter" && count) label += ` (${count})`;
       if (status === "synced" && lastSync) {
         const h = lastSync.getHours().toString().padStart(2, "0");
         const m = lastSync.getMinutes().toString().padStart(2, "0");

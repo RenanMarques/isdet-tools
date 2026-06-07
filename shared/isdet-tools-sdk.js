@@ -24,6 +24,13 @@
  *     await sessions.save(sessionData, {
  *       dependsOn: [{ collection: 'supplies', id: 's1', version: supplyVer }]
  *     })
+ *
+ *     // React to writes from other browser tabs:
+ *     IsdetTools.onCrossTabWrite(() => load())
+ *
+ *     // Inspect unresolvable ops (persisted across reloads):
+ *     const dead = await IsdetTools.getDeadLetterOps()
+ *     await IsdetTools.dismissDeadLetterOp(dead[0].id)
  *   </script>
  *
  * The SDK handles:
@@ -33,6 +40,11 @@
  *   - OCC: conditional PUT with If-Match; 409 → onConflict callback
  *   - Causal dependencies: dependsOn checked at flush; stale → onCausalConflict callback
  *   - Pitfall fix: background reads never overwrite pending local writes
+ *   - Pitfall fix: background reads use version UUID, not timestamp, to detect staleness
+ *   - Pitfall fix: index written before record — no invisible records on partial failure
+ *   - Pitfall fix: storage quota errors propagate from save() instead of silently failing
+ *   - Pitfall fix: unresolvable ops (409, max-retries, causal conflict) go to persistent dead-letter queue
+ *   - Pitfall fix: cross-tab writes propagated via BroadcastChannel
  *   - Sync status indicator
  */
 
@@ -50,6 +62,11 @@
     onConflict: null,        // ({ op, remote }) => void
     onCausalConflict: null,  // ({ stale, changedDependency }) => void
   };
+
+  // BroadcastChannel for cross-tab storage propagation (null in environments without support)
+  const _channel = typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel("__isdet_sync__")
+    : null;
 
   // ─── Local storage (hybrid) ──────────────────────────────────────────────────
 
@@ -70,17 +87,13 @@
         }
       },
 
+      // No try-catch: callers must handle QuotaExceededError and other storage errors.
       async set(key, value) {
-        try {
-          const serialized = JSON.stringify(value);
-          if (backend) {
-            await backend.set(key, serialized);
-          } else {
-            localStorage.setItem(key, serialized);
-          }
-          return true;
-        } catch {
-          return false;
+        const serialized = JSON.stringify(value);
+        if (backend) {
+          await backend.set(key, serialized);
+        } else {
+          localStorage.setItem(key, serialized);
         }
       },
 
@@ -191,6 +204,27 @@
     },
   };
 
+  // ─── Dead-letter queue (persistent, survives page reload) ────────────────────
+
+  const DEAD_LETTER_KEY = "__isdet_dead_letter__";
+
+  const DeadLetter = {
+    async load() {
+      return (await LocalStorage.get(DEAD_LETTER_KEY)) || [];
+    },
+
+    async push(entry) {
+      const list = await this.load();
+      list.push({ ...entry, id: crypto.randomUUID(), addedAt: Date.now() });
+      await LocalStorage.set(DEAD_LETTER_KEY, list);
+    },
+
+    async dismiss(id) {
+      const list = await this.load();
+      await LocalStorage.set(DEAD_LETTER_KEY, list.filter((e) => e.id !== id));
+    },
+  };
+
   // ─── Causal dependency check ─────────────────────────────────────────────────
 
   async function checkCausalDeps(op) {
@@ -215,9 +249,9 @@
   const SyncEngine = {
     _status: "idle",
     _listeners: [],
+    _crossTabListeners: [],
     _timer: null,
     _lastSync: null,
-    _conflicts: [],  // unresolved 409s when no onConflict handler is configured
 
     onStatus(fn) {
       this._listeners.push(fn);
@@ -231,7 +265,12 @@
     async flush() {
       const queue = await Queue.load();
       if (!queue.length) {
-        this._emit("synced", { lastSync: this._lastSync });
+        const deadLetters = await DeadLetter.load().catch(() => []);
+        if (deadLetters.length) {
+          this._emit("dead_letter", { count: deadLetters.length, lastSync: this._lastSync });
+        } else {
+          this._emit("synced", { lastSync: this._lastSync });
+        }
         return;
       }
 
@@ -245,7 +284,15 @@
             if (op.dependsOn?.length) {
               const causalConflict = await checkCausalDeps(op);
               if (causalConflict) {
-                CONFIG.onCausalConflict?.({ stale: op, changedDependency: causalConflict });
+                if (CONFIG.onCausalConflict) {
+                  CONFIG.onCausalConflict({ stale: op, changedDependency: causalConflict });
+                } else {
+                  try {
+                    await DeadLetter.push({ type: "causal_conflict", op, changedDependency: causalConflict });
+                  } catch {
+                    console.warn("[IsdetTools] Dead letter write failed (causal_conflict):", op.namespace, op.collection, op.id);
+                  }
+                }
                 await Queue.remove(op.namespace, op.collection, op.id);
                 continue;
               }
@@ -265,7 +312,11 @@
             if (CONFIG.onConflict) {
               CONFIG.onConflict({ op, remote: e.remote });
             } else {
-              this._conflicts.push({ op, remote: e.remote, detectedAt: Date.now() });
+              try {
+                await DeadLetter.push({ type: "conflict", op, remote: e.remote });
+              } catch {
+                console.warn("[IsdetTools] Dead letter write failed (conflict):", op.namespace, op.collection, op.id);
+              }
               console.warn("[IsdetTools] OCC conflict (no onConflict handler):", op.namespace, op.collection, op.id);
             }
             await Queue.remove(op.namespace, op.collection, op.id);
@@ -273,29 +324,74 @@
             const retries = (op.retries || 0) + 1;
             if (retries < CONFIG.maxRetries) {
               failed.push({ ...op, retries });
+            } else {
+              try {
+                await DeadLetter.push({ type: "max_retries", op });
+              } catch {
+                console.warn("[IsdetTools] Dead letter write failed (max_retries):", op.namespace, op.collection, op.id);
+              }
+              console.warn("[IsdetTools] Max retries exceeded:", op.namespace, op.collection, op.id);
             }
           }
         }
       }
 
-      if (this._conflicts.length) {
-        this._emit("conflict", { pending: this._conflicts.length });
-      } else if (failed.length) {
-        await Queue.save(failed);
+      const deadLetters = await DeadLetter.load().catch(() => []);
+      if (failed.length) {
+        try { await Queue.save(failed); } catch { /* quota: retry state lost */ }
         this._emit("error", { pending: failed.length });
       } else {
         this._lastSync = new Date();
-        this._emit("synced", { lastSync: this._lastSync });
+        if (deadLetters.length) {
+          this._emit("dead_letter", { count: deadLetters.length, lastSync: this._lastSync });
+        } else {
+          this._emit("synced", { lastSync: this._lastSync });
+        }
       }
     },
 
     start() {
       if (this._timer) return;
+
+      // Restore dead-letter state from a previous session
+      DeadLetter.load().then((list) => {
+        if (list.length) this._emit("dead_letter", { count: list.length });
+      }).catch(() => {});
+
       this.flush();
       this._timer = setInterval(() => this.flush(), CONFIG.syncInterval);
 
       window.addEventListener("online", () => this.flush());
       window.addEventListener("focus", () => this.flush());
+
+      // Apply writes from other tabs to localStorage so subsequent reads are fresh
+      if (_channel) {
+        _channel.onmessage = async ({ data: msg }) => {
+          const queue = await Queue.load();
+          const hasPending = queue.some(
+            (o) => o.namespace === msg.namespace &&
+                   o.collection === msg.collection &&
+                   o.id === msg.id
+          );
+          if (hasPending) return;
+
+          try {
+            if (msg.type === "write") {
+              await LocalStorage.set(msg.key, msg.value);
+            } else if (msg.type === "delete") {
+              await LocalStorage.delete(msg.key);
+              const idx = (await LocalStorage.get(msg.indexKey)) || [];
+              await LocalStorage.set(msg.indexKey, idx.filter((x) => x !== msg.id));
+            }
+            SyncEngine._crossTabListeners.forEach((fn) => fn({
+              namespace: msg.namespace,
+              collection: msg.collection,
+              id: msg.id,
+              type: msg.type,
+            }));
+          } catch { /* ignore cross-tab handler errors */ }
+        };
+      }
     },
 
     stop() {
@@ -343,6 +439,7 @@
        * If data.id is omitted, a UUID is generated automatically.
        * Accepts an optional second argument { dependsOn } to declare causal dependencies.
        * Returns the saved object with the id used.
+       * Throws if local storage is full (QuotaExceededError).
        */
       async save(data, { dependsOn } = {}) {
         const id = data.id != null ? String(data.id) : crypto.randomUUID();
@@ -353,14 +450,30 @@
         const createdAt = existing?._createdAt ?? now;
         const expectedVersion = existing?._version ?? null;
 
-        await LocalStorage.set(recordKey(id), {
+        const stored = {
           data,
           _createdAt: createdAt,
           _updatedAt: now,
           _version: newVersion,
           _dependsOn: dependsOn ?? null,
-        });
+        };
+
+        // Write index BEFORE record so partial failure leaves an orphaned index
+        // entry (harmless — findAll filters nulls) rather than an invisible record.
         await this._addToIndex(id);
+        await LocalStorage.set(recordKey(id), stored);
+
+        if (_channel) {
+          _channel.postMessage({
+            type: "write",
+            namespace,
+            collection: collectionName,
+            id,
+            key: recordKey(id),
+            value: stored,
+          });
+        }
+
         await Queue.push({
           type: "save",
           namespace,
@@ -396,7 +509,11 @@
             );
             if (hasPending) return;
 
-            if ((remote.updated_at ?? 0) > (local?._updatedAt ?? 0)) {
+            // Use version UUID to detect staleness; fall back to timestamp for legacy records.
+            const remoteIsNewer = remote.version
+              ? remote.version !== local?._version
+              : (remote.updated_at ?? 0) > (local?._updatedAt ?? 0);
+            if (remoteIsNewer) {
               await LocalStorage.set(recordKey(sid), {
                 data: remote.data,
                 _createdAt: remote.created_at,
@@ -432,7 +549,10 @@
             );
             if (hasPending) return;
 
-            if ((remote.updated_at ?? 0) > (local?._updatedAt ?? 0)) {
+            const remoteIsNewer = remote.version
+              ? remote.version !== local?._version
+              : (remote.updated_at ?? 0) > (local?._updatedAt ?? 0);
+            if (remoteIsNewer) {
               await LocalStorage.set(recordKey(sid), {
                 data: remote.data,
                 _createdAt: remote.created_at,
@@ -471,7 +591,10 @@
               if (hasPending) continue;
 
               const existing = await LocalStorage.get(recordKey(r.id));
-              if ((r.updated_at ?? 0) > (existing?._updatedAt ?? 0)) {
+              const remoteIsNewer = r.version
+                ? r.version !== existing?._version
+                : (r.updated_at ?? 0) > (existing?._updatedAt ?? 0);
+              if (remoteIsNewer) {
                 await LocalStorage.set(recordKey(r.id), {
                   data: r.data,
                   _createdAt: r.created_at,
@@ -495,6 +618,18 @@
         const sid = String(id);
         await LocalStorage.delete(recordKey(sid));
         await this._removeFromIndex(sid);
+
+        if (_channel) {
+          _channel.postMessage({
+            type: "delete",
+            namespace,
+            collection: collectionName,
+            id: sid,
+            key: recordKey(sid),
+            indexKey,
+          });
+        }
+
         await Queue.push({ type: "remove", namespace, collection: collectionName, id: sid });
         SyncEngine.flush();
         return true;
@@ -546,10 +681,12 @@
      * onConflict({ op, remote })
      *   Called when a PUT returns 409 (server version mismatch).
      *   The op is removed from the queue — re-save to retry.
+     *   If omitted, the op is persisted to the dead-letter queue.
      *
      * onCausalConflict({ stale, changedDependency })
      *   Called when a record's declared dependency has changed before flush.
      *   The op is removed from the queue — re-derive and re-save to retry.
+     *   If omitted, the op is persisted to the dead-letter queue.
      */
     configure({ token, syncInterval, apiBase, onConflict, onCausalConflict } = {}) {
       if (token)            CONFIG.token = token;
@@ -571,6 +708,24 @@
      * Used by isdet-tools-sync-status.js to render the visual indicator.
      */
     onSyncStatus: (fn) => SyncEngine.onStatus(fn),
+
+    /**
+     * Registers a callback invoked when another browser tab writes or removes a record.
+     * Use it to refresh in-memory state: IsdetTools.onCrossTabWrite(() => load())
+     */
+    onCrossTabWrite: (fn) => SyncEngine._crossTabListeners.push(fn),
+
+    /**
+     * Returns all ops in the dead-letter queue (unresolvable 409s, causal conflicts
+     * without handler, and ops that exhausted max retries). Persisted across reloads.
+     * Each entry has: { id, type, op, addedAt, ...typeSpecificFields }
+     */
+    getDeadLetterOps: () => DeadLetter.load(),
+
+    /**
+     * Removes a single entry from the dead-letter queue by its id.
+     */
+    dismissDeadLetterOp: (id) => DeadLetter.dismiss(id),
 
     /**
      * Forces immediate flush of the pending sync queue.

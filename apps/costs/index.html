@@ -272,6 +272,7 @@ tr:hover td{background:var(--bg2)}
 // For programmatic access (e.g. Claude.ai): call configure({ token: "..." }) manually.
 IsdetTools.configure({});
 IsdetTools.mountSyncStatus(document.getElementById("sync-indicator"));
+IsdetTools.onCrossTabWrite(() => load());
 
 const store       = IsdetTools.createStore("costs");
 const suppliesCol = store.collection("supplies");
