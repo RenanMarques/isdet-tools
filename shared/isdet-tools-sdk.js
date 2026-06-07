@@ -40,7 +40,7 @@
  *   - OCC: conditional PUT with If-Match; 409 → onConflict callback
  *   - Causal dependencies: dependsOn checked at flush; stale → onCausalConflict callback
  *   - Pitfall fix: background reads never overwrite pending local writes
- *   - Pitfall fix: background reads use version UUID, not timestamp, to detect staleness
+ *   - Pitfall fix: background reads compare version UUID to detect staleness (version is mandatory)
  *   - Pitfall fix: index written before record — no invisible records on partial failure
  *   - Pitfall fix: storage quota errors propagate from save() instead of silently failing
  *   - Pitfall fix: unresolvable ops (409, max-retries, causal conflict) go to persistent dead-letter queue
@@ -509,16 +509,12 @@
             );
             if (hasPending) return;
 
-            // Use version UUID to detect staleness; fall back to timestamp for legacy records.
-            const remoteIsNewer = remote.version
-              ? remote.version !== local?._version
-              : (remote.updated_at ?? 0) > (local?._updatedAt ?? 0);
-            if (remoteIsNewer) {
+            if (remote.version !== local?._version) {
               await LocalStorage.set(recordKey(sid), {
                 data: remote.data,
                 _createdAt: remote.created_at,
                 _updatedAt: remote.updated_at,
-                _version: remote.version ?? null,
+                _version: remote.version,
                 _dependsOn: local?._dependsOn ?? null,
               });
               await col._addToIndex(sid);
@@ -549,15 +545,12 @@
             );
             if (hasPending) return;
 
-            const remoteIsNewer = remote.version
-              ? remote.version !== local?._version
-              : (remote.updated_at ?? 0) > (local?._updatedAt ?? 0);
-            if (remoteIsNewer) {
+            if (remote.version !== local?._version) {
               await LocalStorage.set(recordKey(sid), {
                 data: remote.data,
                 _createdAt: remote.created_at,
                 _updatedAt: remote.updated_at,
-                _version: remote.version ?? null,
+                _version: remote.version,
                 _dependsOn: local?._dependsOn ?? null,
               });
               await col._addToIndex(sid);
@@ -591,15 +584,12 @@
               if (hasPending) continue;
 
               const existing = await LocalStorage.get(recordKey(r.id));
-              const remoteIsNewer = r.version
-                ? r.version !== existing?._version
-                : (r.updated_at ?? 0) > (existing?._updatedAt ?? 0);
-              if (remoteIsNewer) {
+              if (r.version !== existing?._version) {
                 await LocalStorage.set(recordKey(r.id), {
                   data: r.data,
                   _createdAt: r.created_at,
                   _updatedAt: r.updated_at,
-                  _version: r.version ?? null,
+                  _version: r.version,
                   _dependsOn: existing?._dependsOn ?? null,
                 });
                 await col._addToIndex(r.id);
