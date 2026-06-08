@@ -368,10 +368,15 @@
       if (_channel) {
         _channel.onmessage = async ({ data: msg }) => {
           const queue = await Queue.load();
+          // A conflicting pending op is one for the same record but with a
+          // different newVersion — meaning this tab independently modified the
+          // same record. The op that generated this broadcast shares the same
+          // newVersion as msg.value._version, so it is NOT a conflict.
           const hasPending = queue.some(
             (o) => o.namespace === msg.namespace &&
                    o.collection === msg.collection &&
-                   o.id === msg.id
+                   o.id === msg.id &&
+                   o.newVersion !== msg.value?._version
           );
           if (hasPending) return;
 
