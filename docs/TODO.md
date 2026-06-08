@@ -17,3 +17,13 @@
 - [x] **Múltiplas abas** — resolvido: escritas e remoções são propagadas entre abas via `BroadcastChannel("__isdet_sync__")`; localStorage é atualizado imediatamente em outras abas (com guarda contra pending writes). Apps registram `IsdetTools.onCrossTabWrite(() => load())` para reagir na camada de memória
 - [x] **Index desync não atômico** — resolvido: `save()` agora escreve o índice ANTES do registro; falha parcial gera entrada órfã no índice (inofensiva, `findAll()` filtra nulls) em vez de registro invisível
 - [x] **Storage quota** — resolvido: `LocalStorage.set` não silencia mais erros de storage; `save()` rejeita a promise quando a quota é atingida, permitindo que a app faça `catch` e alerte o usuário. Indicador tem estado `"quota"` disponível.
+
+---
+
+### Lacunas de teste
+
+- [ ] **`dismissDeadLetterOp` — teste de integração real** — coberto apenas com mocks; falta teste contra wrangler dev que dispara OCC 409 real → verifica dead-letter → chama dismiss → confirma remoção
+- [ ] **Multi-aba — teste de integração real** — `onCrossTabWrite` coberto só com mocks; falta teste Playwright com duas páginas reais contra wrangler dev
+- [ ] **Quota + sync race** — `save()` rejeitando por quota está testado no browser isolado; falta testar o que acontece quando Worker responde 200 mas o browser falha ao persistir (quota esgotada durante flush)
+- [ ] **Worker: rotas inválidas e métodos não permitidos** — sem testes de contrato para 404 (rota inexistente) e 405 (método não permitido); validar que o Worker responde corretamente nesses casos
+- [ ] **Testes E2E das ferramentas em `apps/`** — nenhum app tem teste de ponta a ponta; cobrir pelo menos o fluxo principal de cada ferramenta existente
