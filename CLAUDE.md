@@ -78,6 +78,8 @@ refactor(functions): simplify auth middleware
 
 Scopes comuns: nome da pasta em `apps/` (ex: `costs`), `shared`, `functions`.
 
+**Uma feature por commit.** Agrupar múltiplas mudanças no mesmo commit apenas se explicitamente solicitado.
+
 ---
 
 ## Naming Convention
