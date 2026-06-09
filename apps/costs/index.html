@@ -54,7 +54,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .field-row label{font-size:12px;color:var(--text2)}
 .field-row input,.field-row select,.field-row textarea{font-size:13px;padding:7px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);outline:none;transition:border-color .15s;font-family:inherit}
 .field-row input:focus,.field-row select:focus,.field-row textarea:focus{border-color:var(--border2)}
+.field-row input[readonly]{color:var(--text2);cursor:default}
+.field-row input[type=number]{-moz-appearance:textfield}
+.field-row input[type=number]::-webkit-inner-spin-button,
+.field-row input[type=number]::-webkit-outer-spin-button{opacity:.25;cursor:pointer;transition:opacity .15s}
+.field-row input[type=number]:hover::-webkit-inner-spin-button,
+.field-row input[type=number]:hover::-webkit-outer-spin-button{opacity:.6}
 .field-row textarea{resize:vertical;min-height:48px}
+.autocomplete-wrap{position:relative}
+.autocomplete-wrap input{width:100%;box-sizing:border-box}
+.autocomplete-list{position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:200;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--rad);max-height:180px;overflow-y:auto;display:none;padding:2px 0;box-shadow:0 4px 12px rgba(0,0,0,.12)}
+.autocomplete-list.open{display:block}
+.autocomplete-list{scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.autocomplete-list::-webkit-scrollbar{width:4px}
+.autocomplete-list::-webkit-scrollbar-track{background:transparent}
+.autocomplete-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+.autocomplete-list::-webkit-scrollbar-thumb:hover{background:var(--text3)}
+.autocomplete-list li{padding:7px 10px;font-size:13px;cursor:pointer;list-style:none;color:var(--text)}
+.autocomplete-list li:hover{background:var(--bg2)}
+.field-row select:disabled,.field-row input:disabled{color:var(--text2);cursor:default;opacity:1}
+.custom-select-wrap{position:relative;width:100%}
+.custom-select-trigger{font-size:13px;line-height:1;padding:8px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);transition:border-color .15s;font-family:inherit;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.custom-select-trigger:hover{border-color:var(--border2)}
+.custom-select-trigger.open{border-color:var(--border2)}
+.custom-select-trigger.disabled{color:var(--text2);cursor:default;pointer-events:none}
+.custom-select-trigger i{line-height:0}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 
@@ -140,7 +164,13 @@ tr:hover td{background:var(--bg2)}
     <div class="card">
       <div class="section-label">Cadastrar insumo</div>
       <div class="two-col">
-        <div class="field-row"><label>Nome do insumo</label><input id="ins-name" placeholder="ex: Papel sublimático A4 Jojo"></div>
+        <div class="field-row"><label>Nome do insumo</label>
+          <div class="autocomplete-wrap">
+            <input id="ins-name" placeholder="ex: Papel sublimático A4 Jojo" autocomplete="off" oninput="onSupplyNameInput()" onfocus="onSupplyNameInput()" onblur="closeSupplyAutocomplete()" style="padding-right:28px">
+            <button id="ins-name-clear" onmousedown="clearSupplyName()" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);padding:2px;line-height:1"><i class="ti ti-x" style="font-size:13px" aria-hidden="true"></i></button>
+            <ul id="ins-name-list" class="autocomplete-list"></ul>
+          </div>
+        </div>
         <div class="field-row"><label>Técnica</label>
           <select id="ins-technique">
             <option value="Geral" selected>Geral</option>
@@ -151,16 +181,23 @@ tr:hover td{background:var(--bg2)}
         </div>
       </div>
       <div class="three-col">
-        <div class="field-row"><label>Quantidade comprada</label><input id="ins-quantity" type="number" min="0.001" step="any" placeholder="100"></div>
+        <div class="field-row"><label>Quantidade comprada</label><input id="ins-quantity" type="number" min="0" step="1" placeholder="100" oninput="syncStockToQuantity()"></div>
         <div class="field-row"><label>Unidade</label>
-          <select id="ins-unit">
-            <option>folha</option><option>ml</option><option>g</option><option>unidade</option><option>metro</option><option>cm</option><option>litro</option><option>kg</option>
-          </select>
+          <div class="autocomplete-wrap">
+            <input id="ins-unit" placeholder="unidade" autocomplete="off" oninput="onUnitInput()" onfocus="onUnitInput()" onblur="closeUnitAutocomplete()" style="padding-right:28px">
+            <button id="ins-unit-clear" onmousedown="clearUnit()" style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);padding:2px;line-height:1"><i class="ti ti-x" style="font-size:13px" aria-hidden="true"></i></button>
+            <ul id="ins-unit-list" class="autocomplete-list"></ul>
+          </div>
         </div>
         <div class="field-row"><label>Valor pago (R$)</label><input id="ins-price" type="number" min="0" step="any" placeholder="45.00"></div>
       </div>
       <div class="two-col">
-        <div class="field-row"><label>Estoque atual</label><input id="ins-stock" type="number" min="0" step="any" placeholder="igual à qty comprada"></div>
+        <div class="field-row"><label>Estoque atual</label>
+          <div style="display:flex;gap:4px">
+            <input id="ins-stock" type="number" min="0" step="any" readonly style="flex:1">
+            <button id="ins-stock-lock" class="btn small" onclick="toggleStockLock()" title="Editar manualmente" style="padding:7px 9px"><i class="ti ti-lock" aria-hidden="true"></i></button>
+          </div>
+        </div>
         <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-min-stock" type="number" min="0" step="any" placeholder="10"></div>
       </div>
       <div class="field-row"><label>Notas</label><textarea id="ins-notes" placeholder="marca, fornecedor, observações..."></textarea></div>
@@ -170,7 +207,7 @@ tr:hover td{background:var(--bg2)}
       <div class="section-label">Insumos cadastrados</div>
       <div class="table-wrap">
         <table id="table-supplies">
-          <thead><tr><th>Nome</th><th>Técnica</th><th>Custo unitário</th><th>Estoque</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th style="width:28px"></th><th>Nome</th><th>Técnica</th><th>Custo unitário</th><th>Estoque</th><th>Status</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -277,13 +314,15 @@ IsdetTools.onCrossTabWrite(() => load());
 const store       = IsdetTools.createStore("costs");
 const suppliesCol = store.collection("supplies");
 const sessionsCol = store.collection("sessions");
+const purchasesCol = store.collection("purchases");
 
 // ─── In-memory state ─────────────────────────────────────────────────────────
-let supplies = [], sessions = [], techniqueFilter = "";
+let supplies = [], sessions = [], purchases = [], techniqueFilter = "";
 
 async function load() {
-  supplies = await suppliesCol.findAll();
-  sessions = await sessionsCol.findAll();
+  supplies  = await suppliesCol.findAll();
+  sessions  = await sessionsCol.findAll();
+  purchases = await purchasesCol.findAll();
   renderAll();
 }
 
@@ -293,6 +332,70 @@ function renderAll() {
   renderDashboard();
   renderFilters();
   renderUnitCost();
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+// ─── Custom select ────────────────────────────────────────────────────────────
+const customSelectMap = new Map();
+
+function initCustomSelect(sel) {
+  const wrap = document.createElement("div");
+  wrap.className = "custom-select-wrap";
+  sel.parentNode.insertBefore(wrap, sel);
+  sel.style.display = "none";
+  wrap.appendChild(sel);
+
+  const trigger = document.createElement("div");
+  trigger.className = "custom-select-trigger";
+  trigger.tabIndex = 0;
+
+  const list = document.createElement("ul");
+  list.className = "autocomplete-list";
+
+  function updateTrigger() {
+    const opt = sel.options[sel.selectedIndex];
+    trigger.innerHTML = `<span>${opt ? opt.text : ""}</span><i class="ti ti-chevron-down" style="font-size:11px;color:var(--text3);flex-shrink:0" aria-hidden="true"></i>`;
+    trigger.classList.toggle("disabled", sel.disabled);
+    trigger.classList.toggle("open", list.classList.contains("open"));
+  }
+
+  function openList() {
+    if (sel.disabled) return;
+    document.querySelectorAll(".autocomplete-list.open").forEach(l => l.classList.remove("open"));
+    list.innerHTML = "";
+    Array.from(sel.options).forEach(opt => {
+      const li = document.createElement("li");
+      li.textContent = opt.text;
+      if (opt.value === sel.value) li.style.fontWeight = "600";
+      li.onmousedown = () => {
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event("change"));
+        list.classList.remove("open");
+        updateTrigger();
+      };
+      list.appendChild(li);
+    });
+    list.classList.add("open");
+    updateTrigger();
+  }
+
+  trigger.addEventListener("click", () => {
+    list.classList.contains("open") ? list.classList.remove("open") : openList();
+    updateTrigger();
+  });
+
+  document.addEventListener("click", e => {
+    if (!wrap.contains(e.target)) { list.classList.remove("open"); updateTrigger(); }
+  });
+
+  wrap.insertBefore(trigger, sel);
+  wrap.appendChild(list);
+  updateTrigger();
+  customSelectMap.set(sel, updateTrigger);
+}
+
+function refreshCustomSelects() {
+  customSelectMap.forEach(update => update());
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -317,6 +420,142 @@ function restoreTab() {
   if (btn) showTab(id, btn);
 }
 
+// ─── Stock lock ───────────────────────────────────────────────────────────────
+function findExistingByName(name) {
+  return supplies.find(i => i.name.trim().toLowerCase() === name.trim().toLowerCase());
+}
+
+function fillExistingSupply(existing) {
+  document.getElementById("ins-technique").value    = existing.technique;
+  document.getElementById("ins-technique").disabled = true;
+  document.getElementById("ins-unit").value         = existing.unit;
+  document.getElementById("ins-unit").readOnly      = true;
+  document.getElementById("ins-min-stock").value    = existing.minStock || "";
+  document.getElementById("ins-min-stock").readOnly = true;
+  document.getElementById("ins-notes").value        = existing.notes || "";
+  document.getElementById("ins-notes").readOnly     = true;
+  refreshCustomSelects();
+}
+
+function clearExistingSupply() {
+  document.getElementById("ins-technique").disabled = false;
+  document.getElementById("ins-unit").readOnly      = false;
+  document.getElementById("ins-min-stock").readOnly = false;
+  document.getElementById("ins-notes").readOnly     = false;
+  refreshCustomSelects();
+}
+
+function onSupplyNameInput() {
+  const val   = document.getElementById("ins-name").value.trim();
+  document.getElementById("ins-name-clear").style.display = val ? "block" : "none";
+  const exact = findExistingByName(val);
+  if (exact) { fillExistingSupply(exact); } else { clearExistingSupply(); }
+  syncStockToQuantity();
+
+  const list = document.getElementById("ins-name-list");
+  const matches = val
+    ? supplies.filter(i => i.name.toLowerCase().includes(val.toLowerCase()))
+    : [...supplies];
+  if (!matches.length) { list.classList.remove("open"); return; }
+  list.innerHTML = "";
+  matches.forEach(i => {
+    const li = document.createElement("li");
+    li.textContent = i.name;
+    li.onmousedown = () => {
+      document.getElementById("ins-name").value = i.name;
+      list.classList.remove("open");
+      fillExistingSupply(i);
+      syncStockToQuantity();
+    };
+    list.appendChild(li);
+  });
+  list.classList.add("open");
+}
+
+function closeSupplyAutocomplete() {
+  document.getElementById("ins-name-list").classList.remove("open");
+}
+
+// ─── Unit autocomplete ────────────────────────────────────────────────────────
+const UNIT_SEEDS = ["unidade", "folha", "ml", "g", "m"];
+
+function unitOptions() {
+  const fromSupplies = supplies.map(i => i.unit).filter(Boolean);
+  return [...new Set([...UNIT_SEEDS, ...fromSupplies])];
+}
+
+function onUnitInput() {
+  const input = document.getElementById("ins-unit");
+  const val   = input.value.trim();
+  document.getElementById("ins-unit-clear").style.display = val ? "block" : "none";
+  const list    = document.getElementById("ins-unit-list");
+  const options = unitOptions();
+  const matches = val ? options.filter(u => u.toLowerCase().includes(val.toLowerCase())) : options;
+  if (!matches.length) { list.classList.remove("open"); return; }
+  list.innerHTML = "";
+  matches.forEach(u => {
+    const li = document.createElement("li");
+    li.textContent = u;
+    li.onmousedown = () => { input.value = u; list.classList.remove("open"); document.getElementById("ins-unit-clear").style.display = "block"; };
+    list.appendChild(li);
+  });
+  list.classList.add("open");
+}
+
+function closeUnitAutocomplete() {
+  document.getElementById("ins-unit-list").classList.remove("open");
+}
+
+function clearUnit() {
+  const input = document.getElementById("ins-unit");
+  input.value = "";
+  document.getElementById("ins-unit-clear").style.display = "none";
+  document.getElementById("ins-unit-list").classList.remove("open");
+  input.focus();
+}
+
+function clearSupplyName() {
+  const input = document.getElementById("ins-name");
+  input.value = "";
+  document.getElementById("ins-name-clear").style.display = "none";
+  document.getElementById("ins-name-list").classList.remove("open");
+  clearExistingSupply();
+  syncStockToQuantity();
+  input.focus();
+}
+
+function syncStockToQuantity() {
+  const stockInput = document.getElementById("ins-stock");
+  if (!stockInput.readOnly) return;
+  const qty  = parseFloat(document.getElementById("ins-quantity").value) || 0;
+  const name = document.getElementById("ins-name").value.trim();
+  const prev = findExistingByName(name)?.stock ?? 0;
+  stockInput.value = qty ? prev + qty : "";
+}
+
+function toggleStockLock() {
+  const input = document.getElementById("ins-stock");
+  const btn   = document.getElementById("ins-stock-lock");
+  const locking = !input.readOnly;
+  input.readOnly = locking;
+  btn.innerHTML  = locking
+    ? '<i class="ti ti-lock" aria-hidden="true"></i>'
+    : '<i class="ti ti-lock-open" aria-hidden="true"></i>';
+  if (locking) {
+    syncStockToQuantity();
+  } else {
+    input.focus();
+  }
+}
+
+function resetStockLock() {
+  const input = document.getElementById("ins-stock");
+  const btn   = document.getElementById("ins-stock-lock");
+  input.readOnly = true;
+  input.value    = "";
+  btn.innerHTML  = '<i class="ti ti-lock" aria-hidden="true"></i>';
+}
+
 // ─── Supplies ─────────────────────────────────────────────────────────────────
 async function saveSupply() {
   const name = document.getElementById("ins-name").value.trim();
@@ -324,52 +563,107 @@ async function saveSupply() {
   const quantity = parseFloat(document.getElementById("ins-quantity").value) || 0;
   const price    = parseFloat(document.getElementById("ins-price").value) || 0;
   const raw      = parseFloat(document.getElementById("ins-stock").value);
-  const minStock = parseFloat(document.getElementById("ins-min-stock").value) || 0;
-  const record = {
-    id: Date.now(),
-    name,
-    technique: document.getElementById("ins-technique").value,
-    unit:      document.getElementById("ins-unit").value,
-    quantity, price,
-    stock: isNaN(raw) ? quantity : raw,
-    minStock,
-    notes: document.getElementById("ins-notes").value.trim(),
+
+  const existing = findExistingByName(name);
+  if (existing) {
+    existing.stock    = isNaN(raw) ? existing.stock + quantity : raw;
+    existing.quantity += quantity;
+    existing.price    += price;
+    await suppliesCol.save(existing);
+  } else {
+    const minStock = parseFloat(document.getElementById("ins-min-stock").value) || 0;
+    const record = {
+      id: Date.now(),
+      name,
+      technique: document.getElementById("ins-technique").value,
+      unit:      document.getElementById("ins-unit").value,
+      quantity, price,
+      stock: isNaN(raw) ? quantity : raw,
+      minStock,
+      notes: document.getElementById("ins-notes").value.trim(),
+    };
+    supplies.push(record);
+    await suppliesCol.save(record);
+  }
+
+  const purchase = {
+    id: Date.now() + 1,
+    supplyName: name,
+    unit: document.getElementById("ins-unit").value,
+    quantity,
+    price,
+    purchasedAt: new Date().toISOString().slice(0, 10),
   };
-  supplies.push(record);
-  await suppliesCol.save(record);
+  purchases.push(purchase);
+  await purchasesCol.save(purchase);
+
   renderAll(); renderSessionSupplies();
-  ["ins-name","ins-quantity","ins-price","ins-stock","ins-min-stock","ins-notes"]
+  ["ins-name","ins-quantity","ins-price","ins-min-stock","ins-notes"]
     .forEach(id => document.getElementById(id).value = "");
+  resetStockLock();
+  clearExistingSupply();
 }
 
 async function removeSupply(id) {
   if (!confirm("Remover insumo?")) return;
+  const supply = supplies.find(i => i.id === id);
   supplies = supplies.filter(i => i.id !== id);
   await suppliesCol.remove(id);
+  if (supply) {
+    const related = purchases.filter(p => p.supplyName.toLowerCase() === supply.name.toLowerCase());
+    purchases = purchases.filter(p => p.supplyName.toLowerCase() !== supply.name.toLowerCase());
+    for (const p of related) await purchasesCol.remove(p.id);
+  }
   renderAll(); renderSessionSupplies();
 }
 
 function renderSuppliesTable() {
   const tb = document.querySelector("#table-supplies tbody");
   if (!supplies.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="empty">Nenhum insumo cadastrado ainda.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Nenhum insumo cadastrado ainda.</td></tr>';
     return;
   }
   tb.innerHTML = supplies.map(i => {
-    const cu       = costPerUnit(i);
-    const isLow    = i.minStock > 0 && i.stock <= i.minStock;
-    const st       = isLow
+    const cu      = costPerUnit(i);
+    const isLow   = i.minStock > 0 && i.stock <= i.minStock;
+    const st      = isLow
       ? '<span class="badge badge-danger">Baixo</span>'
       : '<span class="badge badge-green">OK</span>';
+    const history = purchases
+      .filter(p => p.supplyName.toLowerCase() === i.name.toLowerCase())
+      .sort((a, b) => a.purchasedAt.localeCompare(b.purchasedAt));
+    const expandBtn = history.length
+      ? `<button class="btn small" onclick="togglePurchaseHistory(${i.id})" id="btn-expand-${i.id}" style="padding:3px 7px"><i class="ti ti-chevron-right" id="icon-expand-${i.id}" aria-hidden="true"></i></button>`
+      : '';
+    const historyRows = history.map(p => `<tr style="background:var(--bg2)">
+      <td></td>
+      <td colspan="2" style="color:var(--text3);font-size:12px;padding-left:1.5rem">${p.purchasedAt}</td>
+      <td style="font-size:12px;font-variant-numeric:tabular-nums">${fmt(p.price / p.quantity)}/${p.unit}</td>
+      <td style="font-size:12px">${fmtN(p.quantity, 2)} ${p.unit}</td>
+      <td style="font-size:12px;color:var(--text3)">${fmt(p.price)}</td>
+      <td></td>
+    </tr>`).join("");
     return `<tr>
+      <td>${expandBtn}</td>
       <td><strong>${i.name}</strong>${i.notes ? `<br><span style="color:var(--text3);font-size:11px">${i.notes}</span>` : ""}</td>
       <td><span class="badge badge-gray">${i.technique}</span></td>
       <td style="font-variant-numeric:tabular-nums">${fmt(cu)}/${i.unit}</td>
       <td>${fmtN(i.stock, 1)} ${i.unit}</td>
       <td>${st}</td>
       <td><button class="btn small danger-btn" onclick="removeSupply(${i.id})"><i class="ti ti-trash" aria-hidden="true"></i></button></td>
+    </tr>
+    <tr id="purchase-history-${i.id}" style="display:none">
+      <td colspan="7" style="padding:0">${history.length ? `<table style="width:100%;border-collapse:collapse"><tbody>${historyRows}</tbody></table>` : ""}</td>
     </tr>`;
   }).join("");
+}
+
+function togglePurchaseHistory(id) {
+  const row  = document.getElementById(`purchase-history-${id}`);
+  const icon = document.getElementById(`icon-expand-${id}`);
+  const open = row.style.display !== "none";
+  row.style.display  = open ? "none" : "table-row";
+  icon.className     = open ? "ti ti-chevron-right" : "ti ti-chevron-down";
 }
 
 // ─── Sessions ─────────────────────────────────────────────────────────────────
@@ -613,6 +907,8 @@ function calculatePrice() {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
+document.querySelectorAll(".field-row select").forEach(initCustomSelect);
+document.getElementById("ins-unit").value = "unidade";
 document.getElementById("ses-date").valueAsDate = new Date();
 load();
 restoreTab();
