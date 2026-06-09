@@ -63,6 +63,23 @@ Ao adicionar colunas ou tabelas: criar um novo arquivo `NNNN_....sql` — nunca 
 
 Sem migração de banco necessária — coleções novas surgem no primeiro `save()`.
 
+## Commit Convention
+
+Usar **Conventional Commits com scope**, onde o scope identifica a ferramenta ou módulo:
+
+```
+<type>(<scope>): <description>
+
+feat(costs): add export to CSV
+fix(costs): make Geral the default technique option
+chore(shared): update SDK sync logic
+refactor(functions): simplify auth middleware
+```
+
+Scopes comuns: nome da pasta em `apps/` (ex: `costs`), `shared`, `functions`.
+
+---
+
 ## Naming Convention
 
 **All names in code must be English.** Only UI text displayed to the user stays in Portuguese.
