@@ -21,7 +21,7 @@ process.env.TEST_API_TOKEN = process.env.ISDET_TOOLS_API_TOKEN ?? vars.ISDET_TOO
 
 export default defineConfig({
   testDir: './test',
-  testMatch: '**/sdk-integration.spec.js',
+  testMatch: ['**/sdk-integration.spec.js', '**/costs.spec.js'],
   timeout: 30_000,
   use: {
     baseURL: 'http://127.0.0.1:8788',

@@ -195,6 +195,120 @@ test('background read refreshes stale local cache when server version differs', 
   expect(freshValue.name).toBe('fresh');
 });
 
+test('dismissDeadLetterOp removes the op from dead-letter after a real OCC 409', async ({ page }) => {
+  const namespace = ns();
+  await initSDK(page);
+
+  // 1. Create the record and flush to D1.
+  await page.evaluate(async ([namespace]) => {
+    await IsdetTools.createStore(namespace).collection('items').save({ id: 'x', name: 'original' });
+  }, [namespace]);
+  await waitForQueueEmpty(page);
+
+  // 2. Advance the server version directly, making the local cache stale.
+  const patch = await apiRequest(
+    page, 'PUT', `/${namespace}/items/x`,
+    { id: 'x', name: 'server-update' },
+    { 'X-New-Version': 'v-external' },
+  );
+  expect(patch.status).toBe(200);
+
+  // 3. Save locally — SDK queues a PUT with the stale If-Match, which 409s.
+  await page.evaluate(async ([namespace]) => {
+    await IsdetTools.createStore(namespace).collection('items').save({ id: 'x', name: 'local-update' });
+  }, [namespace]);
+  await waitForQueueEmpty(page);
+
+  // 4. Wait for the 409 to land in dead-letter.
+  await page.waitForFunction(
+    () => JSON.parse(localStorage.getItem('__isdet_dead_letter__') || '[]').length > 0,
+    { timeout: 10_000 },
+  );
+
+  // 5. Dismiss the entry.
+  await page.evaluate(async () => {
+    const [entry] = await IsdetTools.getDeadLetterOps();
+    await IsdetTools.dismissDeadLetterOp(entry.id);
+  });
+
+  // 6. Dead-letter must be empty — both in memory and in localStorage.
+  const dead = await page.evaluate(() => IsdetTools.getDeadLetterOps());
+  expect(dead).toHaveLength(0);
+
+  const raw = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('__isdet_dead_letter__') || '[]')
+  );
+  expect(raw).toHaveLength(0);
+});
+
+test('multi-tab: onCrossTabWrite fires in tab B when tab A writes against real API', async ({ context }) => {
+  const namespace = ns();
+
+  const pageA = await context.newPage();
+  const pageB = await context.newPage();
+
+  await initSDK(pageA);
+  await initSDK(pageB);
+
+  // Register cross-tab listener on B before A writes.
+  await pageB.evaluate(() => {
+    window.__crossTabFired = false;
+    IsdetTools.onCrossTabWrite(() => { window.__crossTabFired = true; });
+  });
+
+  // Write in A and flush.
+  await pageA.evaluate(async ([namespace]) => {
+    await IsdetTools.createStore(namespace).collection('items').save({ id: 'shared', value: 99 });
+  }, [namespace]);
+  await waitForQueueEmpty(pageA);
+
+  // B receives the BroadcastChannel message and fires the callback.
+  await pageB.waitForFunction(() => window.__crossTabFired === true, { timeout: 5_000 });
+
+  // B's localStorage should hold the record written by A.
+  const stored = await pageB.evaluate(([namespace]) => {
+    const raw = localStorage.getItem(`__isdet__${namespace}__items__shared`);
+    return raw ? JSON.parse(raw).data : null;
+  }, [namespace]);
+  expect(stored?.value).toBe(99);
+});
+
+test('Worker: GET on nonexistent id returns 404', async ({ page }) => {
+  const namespace = ns();
+  await initSDK(page);
+
+  const res = await apiRequest(page, 'GET', `/${namespace}/items/does-not-exist`);
+  expect(res.status).toBe(404);
+  expect(res.body).toMatchObject({ error: expect.any(String) });
+});
+
+test('Worker: POST to a collection returns 405', async ({ page }) => {
+  const namespace = ns();
+  await initSDK(page);
+
+  const res = await apiRequest(page, 'POST', `/${namespace}/items`, { id: 'x' });
+  expect(res.status).toBe(405);
+  expect(res.body).toMatchObject({ error: expect.any(String) });
+});
+
+test('Worker: PATCH to a record returns 405', async ({ page }) => {
+  const namespace = ns();
+  await initSDK(page);
+
+  const res = await apiRequest(page, 'PATCH', `/${namespace}/items/x`, { name: 'update' });
+  expect(res.status).toBe(405);
+  expect(res.body).toMatchObject({ error: expect.any(String) });
+});
+
+test('Worker: PUT without id returns 405', async ({ page }) => {
+  const namespace = ns();
+  await initSDK(page);
+
+  const res = await apiRequest(page, 'PUT', `/${namespace}/items`, { id: 'x' });
+  expect(res.status).toBe(405);
+  expect(res.body).toMatchObject({ error: expect.any(String) });
+});
+
 test('multiple records in a collection all sync and are retrieved after cache clear', async ({ page }) => {
   const namespace = ns();
   await initSDK(page);

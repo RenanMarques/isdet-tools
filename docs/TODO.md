@@ -22,8 +22,8 @@
 
 ### Lacunas de teste
 
-- [ ] **`dismissDeadLetterOp` — teste de integração real** — coberto apenas com mocks; falta teste contra wrangler dev que dispara OCC 409 real → verifica dead-letter → chama dismiss → confirma remoção
-- [ ] **Multi-aba — teste de integração real** — `onCrossTabWrite` coberto só com mocks; falta teste Playwright com duas páginas reais contra wrangler dev
-- [ ] **Quota + sync race** — `save()` rejeitando por quota está testado no browser isolado; falta testar o que acontece quando Worker responde 200 mas o browser falha ao persistir (quota esgotada durante flush)
-- [ ] **Worker: rotas inválidas e métodos não permitidos** — sem testes de contrato para 404 (rota inexistente) e 405 (método não permitido); validar que o Worker responde corretamente nesses casos
-- [ ] **Testes E2E das ferramentas em `apps/`** — nenhum app tem teste de ponta a ponta; cobrir pelo menos o fluxo principal de cada ferramenta existente
+- [x] **`dismissDeadLetterOp` — teste de integração real** — `test/sdk-integration.spec.js`: dispara OCC 409 real contra wrangler dev → verifica dead-letter → chama dismiss → confirma remoção de localStorage e de `getDeadLetterOps()`
+- [x] **Multi-aba — teste de integração real** — `test/sdk-integration.spec.js`: duas páginas reais (`context.newPage()`) contra wrangler dev; verifica que `onCrossTabWrite` dispara em B após escrita em A e que localStorage de B é atualizado
+- [x] **Quota + sync race** — `test/sdk.spec.js`: mock intercepta o primeiro `setItem` do `__isdet_sync_queue__` após PUT 200; verifica que o op permanece na fila com `retries: 1` (tratado como erro retryable, não silenciado)
+- [x] **Worker: rotas inválidas e métodos não permitidos** — `test/sdk-integration.spec.js`: GET em id inexistente → 404; POST/PATCH em coleção/registro → 405; PUT sem id → 405
+- [x] **Testes E2E das ferramentas em `apps/`** — `test/costs.spec.js`: cadastrar insumo → tabela atualizada; registrar sessão → histórico atualizado; dashboard renderiza métricas; simulador de preço calcula corretamente

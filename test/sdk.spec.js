@@ -254,6 +254,57 @@ test.describe('index atomicity', () => {
 
 test.describe('storage quota', () => {
 
+  test('quota failure on Queue.remove after successful PUT keeps op in queue for retry', async ({ page }) => {
+    // Mock: PUT returns 200; GET returns empty list.
+    await page.route('**/api/**', (route) =>
+      route.request().method() === 'PUT' ? route.fulfill(PUT_OK) : route.fulfill(EMPTY_LIST)
+    );
+
+    await page.goto('/test/fixture.html');
+
+    // Pre-seed the sync queue with one pending save op.
+    await page.evaluate(() => {
+      localStorage.setItem('__isdet_sync_queue__', JSON.stringify([{
+        type: 'save', namespace: 't', collection: 'items', id: 'x',
+        data: { id: 'x', name: 'test' }, expectedVersion: null, newVersion: 'v1',
+        dependsOn: null, retries: 0, timestamp: Date.now(),
+      }]));
+    });
+
+    // Intercept the first queue write during flush (Queue.remove → save filtered []).
+    // Restore immediately so the second write (Queue.save(failed)) goes through,
+    // preserving the retry state.
+    await page.evaluate(() => {
+      const orig = Storage.prototype.setItem;
+      let queueWrites = 0;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === '__isdet_sync_queue__') {
+          queueWrites++;
+          if (queueWrites === 1) {
+            Storage.prototype.setItem = orig;
+            throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+          }
+        }
+        return orig.apply(this, arguments);
+      };
+    });
+
+    // Call sync() directly (without configure) to run exactly one flush.
+    // configure() would call SyncEngine.start() which schedules a concurrent second
+    // flush that could drain the queue before we observe the retry state.
+    await page.evaluate(async () => {
+      await IsdetTools.sync();
+    });
+
+    // Queue.remove threw after the successful PUT, so the op must be back in the queue
+    // with retries: 1 (saved by the subsequent Queue.save(failed) call).
+    const retries = await page.evaluate(() => {
+      const q = JSON.parse(localStorage.getItem('__isdet_sync_queue__') || '[]');
+      return q.length > 0 ? q[0].retries : -1;
+    });
+    expect(retries).toBe(1);
+  });
+
   test('save() rejects with QuotaExceededError when localStorage is full', async ({ page }) => {
     await page.goto('/test/fixture.html');
 
