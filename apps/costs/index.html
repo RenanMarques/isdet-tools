@@ -110,10 +110,10 @@ tr:hover td{background:var(--bg2)}
   </header>
 
   <div class="tabs">
-    <button class="tab active" onclick="showTab('dashboard',this)"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Painel</button>
-    <button class="tab" onclick="showTab('supplies',this)"><i class="ti ti-package" aria-hidden="true"></i> Insumos</button>
-    <button class="tab" onclick="showTab('sessions',this)"><i class="ti ti-flask" aria-hidden="true"></i> Sessões</button>
-    <button class="tab" onclick="showTab('unit-cost',this)"><i class="ti ti-calculator" aria-hidden="true"></i> Custo/peça</button>
+    <button class="tab active" data-tab="dashboard" onclick="showTab('dashboard',this)"><i class="ti ti-layout-dashboard" aria-hidden="true"></i> Painel</button>
+    <button class="tab" data-tab="supplies" onclick="showTab('supplies',this)"><i class="ti ti-package" aria-hidden="true"></i> Insumos</button>
+    <button class="tab" data-tab="sessions" onclick="showTab('sessions',this)"><i class="ti ti-flask" aria-hidden="true"></i> Sessões</button>
+    <button class="tab" data-tab="unit-cost" onclick="showTab('unit-cost',this)"><i class="ti ti-calculator" aria-hidden="true"></i> Custo/peça</button>
   </div>
 
   <!-- DASHBOARD -->
@@ -305,8 +305,16 @@ function showTab(id, btn) {
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   document.getElementById("panel-" + id).classList.add("active");
   btn.classList.add("active");
+  localStorage.setItem("costs__activeTab", id);
   if (id === "sessions") renderSessionSupplies();
   if (id === "unit-cost") renderUnitCost();
+}
+
+function restoreTab() {
+  const id = localStorage.getItem("costs__activeTab");
+  if (!id || id === "dashboard") return;
+  const btn = document.querySelector(`.tab[data-tab="${id}"]`);
+  if (btn) showTab(id, btn);
 }
 
 // ─── Supplies ─────────────────────────────────────────────────────────────────
@@ -607,6 +615,7 @@ function calculatePrice() {
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 document.getElementById("ses-date").valueAsDate = new Date();
 load();
+restoreTab();
 </script>
 </body>
 </html>
