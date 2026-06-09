@@ -10,6 +10,7 @@ compatibility_date = "2024-01-01"
 binding = "DB"
 database_name = "isdet-tools-db"
 database_id = "c724504f-d963-4b4e-af0a-d839efd2d15a"
+preview_database_id = "isdet-tools-db"
 migrations_dir = "migrations"
 
 # Variáveis de ambiente ficam no painel do Cloudflare (não aqui),
