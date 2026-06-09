@@ -54,7 +54,7 @@
   // ─── Configuration ───────────────────────────────────────────────────────────
 
   const CONFIG = {
-    apiBase: "https://tools.isdet.net/api",
+    apiBase: location.origin + "/api",
     token: "",
     syncInterval: 30_000,
     retryDelay: 5_000,
