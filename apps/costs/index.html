@@ -598,6 +598,7 @@ async function saveSupply() {
     quantity,
     price,
     purchasedAt: new Date().toISOString().slice(0, 10),
+    notes: document.getElementById("ins-notes").value.trim(),
   };
   purchases.push(purchase);
   await purchasesCol.save(purchase);
@@ -642,11 +643,14 @@ function renderSuppliesTable() {
       : '';
     const historyRows = history.map(p => `<tr style="background:var(--bg2)">
       <td></td>
-      <td colspan="2" style="color:var(--text3);font-size:12px;padding-left:1.5rem">${p.purchasedAt}</td>
+      <td colspan="2" style="color:var(--text3);font-size:12px;padding-left:1.5rem">${p.purchasedAt}${p.notes ? `<br><span style="font-size:11px;font-style:italic">${p.notes}</span>` : ""}</td>
       <td style="font-size:12px;font-variant-numeric:tabular-nums">${fmt(p.price / p.quantity)}/${p.unit}</td>
       <td style="font-size:12px">${fmtN(p.quantity, 2)} ${p.unit}</td>
       <td style="font-size:12px;color:var(--text3)">${fmt(p.price)}</td>
-      <td></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn small" onclick="openEditPurchaseModal(${p.id})" style="padding:3px 7px;margin-right:2px"><i class="ti ti-pencil" aria-hidden="true"></i></button>
+        <button class="btn small danger-btn" onclick="deletePurchase(${p.id})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </td>
     </tr>`).join("");
     return `<tr>
       <td>${expandBtn}</td>
@@ -661,6 +665,76 @@ function renderSuppliesTable() {
       <td colspan="7" style="padding:0">${history.length ? `<table style="width:100%;border-collapse:collapse"><tbody>${historyRows}</tbody></table>` : ""}</td>
     </tr>`;
   }).join("");
+}
+
+async function deletePurchase(purchaseId) {
+  if (!confirm("Remover esta compra?")) return;
+  const p = purchases.find(x => x.id === purchaseId);
+  if (!p) return;
+  const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
+  if (supply) {
+    supply.quantity -= p.quantity;
+    supply.price    -= p.price;
+    await suppliesCol.save(supply);
+  }
+  purchases = purchases.filter(x => x.id !== purchaseId);
+  await purchasesCol.remove(purchaseId);
+  renderAll(); renderSessionSupplies();
+}
+
+function openEditPurchaseModal(purchaseId) {
+  const p = purchases.find(x => x.id === purchaseId);
+  if (!p) return;
+  document.getElementById("__isdet_edit_purchase__")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "__isdet_edit_purchase__";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--bg);border-radius:8px;width:min(380px,100%);padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:600">Editar compra</div>
+        <button onclick="document.getElementById('__isdet_edit_purchase__').remove()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:20px;line-height:1" aria-label="Fechar">×</button>
+      </div>
+      <div class="field-row" style="margin-bottom:10px"><label>Data</label><input type="date" id="epp-date"></div>
+      <div class="field-row" style="margin-bottom:10px"><label>Quantidade comprada</label><input type="number" id="epp-quantity" min="0" step="any"></div>
+      <div class="field-row" style="margin-bottom:10px"><label>Valor pago (R$)</label><input type="number" id="epp-price" min="0" step="any"></div>
+      <div class="field-row" style="margin-bottom:14px"><label>Notas</label><textarea id="epp-notes" style="min-height:56px"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('__isdet_edit_purchase__').remove()">Cancelar</button>
+        <button class="btn primary" onclick="saveEditedPurchase(${purchaseId})">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById("epp-date").value     = p.purchasedAt;
+  document.getElementById("epp-quantity").value = p.quantity;
+  document.getElementById("epp-price").value    = p.price;
+  document.getElementById("epp-notes").value    = p.notes || "";
+}
+
+async function saveEditedPurchase(purchaseId) {
+  const p       = purchases.find(x => x.id === purchaseId);
+  if (!p) return;
+  const date    = document.getElementById("epp-date").value;
+  const qty     = parseFloat(document.getElementById("epp-quantity").value);
+  const price   = parseFloat(document.getElementById("epp-price").value);
+  const notes   = document.getElementById("epp-notes").value.trim();
+  if (!date)              { alert("Informe a data."); return; }
+  if (!qty   || qty   <= 0) { alert("Informe uma quantidade maior que zero."); return; }
+  if (!price || price <= 0) { alert("Informe um valor pago maior que zero."); return; }
+  const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
+  if (supply) {
+    supply.quantity = supply.quantity - p.quantity + qty;
+    supply.price    = supply.price    - p.price    + price;
+    await suppliesCol.save(supply);
+  }
+  p.purchasedAt = date;
+  p.quantity    = qty;
+  p.price       = price;
+  p.notes       = notes;
+  await purchasesCol.save(p);
+  document.getElementById("__isdet_edit_purchase__").remove();
+  renderAll(); renderSessionSupplies();
 }
 
 function togglePurchaseHistory(id) {
