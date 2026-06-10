@@ -183,7 +183,7 @@ tr:hover td{background:var(--bg2)}
         </div>
       </div>
       <div class="three-col">
-        <div class="field-row"><label>Quantidade comprada</label><input id="ins-quantity" type="number" min="0" step="1" placeholder="100" oninput="syncStockToQuantity()"></div>
+        <div class="field-row"><label>Quantidade comprada</label><input id="ins-quantity" type="number" min="0" step="1" oninput="syncStockToQuantity()"></div>
         <div class="field-row"><label>Unidade</label>
           <div class="autocomplete-wrap">
             <input id="ins-unit" placeholder="unidade" autocomplete="off" oninput="onUnitInput()" onfocus="onUnitInput()" onblur="closeUnitAutocomplete()" style="padding-right:28px">
@@ -191,7 +191,7 @@ tr:hover td{background:var(--bg2)}
             <ul id="ins-unit-list" class="autocomplete-list"></ul>
           </div>
         </div>
-        <div class="field-row"><label>Valor pago (R$)</label><input id="ins-price" type="number" min="0" step="any" placeholder="45.00"></div>
+        <div class="field-row"><label>Valor pago (R$)</label><input id="ins-price" type="number" min="0" step="any"></div>
       </div>
       <div class="two-col">
         <div class="field-row"><label>Estoque atual</label>
@@ -200,7 +200,7 @@ tr:hover td{background:var(--bg2)}
             <button id="ins-stock-lock" class="btn small" onclick="toggleStockLock()" title="Editar manualmente" style="padding:7px 9px"><i class="ti ti-lock" aria-hidden="true"></i></button>
           </div>
         </div>
-        <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-min-stock" type="number" min="0" step="any" placeholder="10"></div>
+        <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-min-stock" type="number" min="0" step="any"></div>
       </div>
       <div class="field-row"><label>Notas</label><textarea id="ins-notes" placeholder="marca, fornecedor, observações..."></textarea></div>
       <button class="btn primary" onclick="saveSupply()"><i class="ti ti-plus" aria-hidden="true"></i> Cadastrar insumo</button>
