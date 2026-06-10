@@ -690,14 +690,19 @@ async function deletePurchase(purchaseId) {
   const p = purchases.find(x => x.id === purchaseId);
   if (!p) return;
   const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
+  let quantityZeroed = false;
   if (supply) {
     supply.quantity -= p.quantity;
     supply.price    -= p.price;
+    if (supply.quantity <= 0) quantityZeroed = true;
     await suppliesCol.save(supply);
   }
   purchases = purchases.filter(x => x.id !== purchaseId);
   await purchasesCol.remove(purchaseId);
   renderAll(); renderSessionSupplies();
+  if (quantityZeroed) {
+    alert(`O histórico de compras de "${supply.name}" ficou zerado. O estoque exibido pode não refletir as compras registradas — verifique o valor manualmente.`);
+  }
 }
 
 function openEditPurchaseModal(purchaseId) {
