@@ -455,7 +455,7 @@ function findExistingByName(name) {
 function fillExistingSupply(existing) {
   document.getElementById("ins-technique").value    = existing.technique;
   document.getElementById("ins-technique").disabled = true;
-  document.getElementById("ins-unit").value         = existing.unit;
+  document.getElementById("ins-unit").value         = formatUnit(existing.unit);
   document.getElementById("ins-unit").readOnly      = true;
   document.getElementById("ins-min-stock").value    = existing.minStock || "";
   document.getElementById("ins-min-stock").readOnly = true;
@@ -523,6 +523,11 @@ function formatUnit(unit) {
   return label ? `${label} (${unit})` : unit;
 }
 
+function parseUnit(val) {
+  const match = val.match(/\(([^)]+)\)$/);
+  return match ? match[1] : val;
+}
+
 function unitOptions() {
   const fromSupplies = supplies.map(i => i.unit).filter(Boolean);
   return [...new Set([...UNIT_SEEDS, ...fromSupplies])];
@@ -534,13 +539,16 @@ function onUnitInput() {
   document.getElementById("ins-unit-clear").style.display = val ? "block" : "none";
   const list    = document.getElementById("ins-unit-list");
   const options = unitOptions();
-  const matches = val ? options.filter(u => u.toLowerCase().includes(val.toLowerCase())) : options;
+  const q = val.toLowerCase();
+  const matches = val
+    ? options.filter(u => u.toLowerCase().includes(q) || formatUnit(u).toLowerCase().includes(q))
+    : options;
   if (!matches.length) { list.classList.remove("open"); return; }
   list.innerHTML = "";
   matches.forEach(u => {
     const li = document.createElement("li");
     li.textContent = formatUnit(u);
-    li.onmousedown = () => { input.value = u; list.classList.remove("open"); document.getElementById("ins-unit-clear").style.display = "block"; };
+    li.onmousedown = () => { input.value = formatUnit(u); list.classList.remove("open"); document.getElementById("ins-unit-clear").style.display = "block"; };
     list.appendChild(li);
   });
   list.classList.add("open");
@@ -610,7 +618,7 @@ async function saveSupply() {
   if (!quantity || quantity <= 0) { showFieldError("ins-quantity", "Informe uma quantidade maior que zero."); valid = false; }
   const price = parseFloat(document.getElementById("ins-price").value);
   if (!price || price <= 0) { showFieldError("ins-price", "Informe um valor pago maior que zero."); valid = false; }
-  const unit = document.getElementById("ins-unit").value.trim();
+  const unit = parseUnit(document.getElementById("ins-unit").value.trim());
   if (!unit) { showFieldError("ins-unit", "Informe a unidade."); valid = false; }
   if (!valid) return;
   const raw      = parseFloat(document.getElementById("ins-stock").value);
@@ -627,7 +635,7 @@ async function saveSupply() {
       id: Date.now(),
       name,
       technique: document.getElementById("ins-technique").value,
-      unit:      document.getElementById("ins-unit").value,
+      unit,
       quantity, price,
       stock: isNaN(raw) ? quantity : raw,
       minStock,
@@ -640,7 +648,7 @@ async function saveSupply() {
   const purchase = {
     id: Date.now() + 1,
     supplyName: name,
-    unit: document.getElementById("ins-unit").value,
+    unit,
     quantity,
     price,
     purchasedAt: new Date().toISOString().slice(0, 10),
