@@ -93,7 +93,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .btn.small{font-size:11px;padding:4px 9px}
 
 /* Badges */
-.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500;text-align:center}
 .badge-orange{background:var(--accent-bg);color:var(--accent-text)}
 .badge-green{background:var(--success-bg);color:var(--success-text)}
 .badge-gray{background:var(--bg2);color:var(--text2);border:0.5px solid var(--border)}
@@ -125,6 +125,11 @@ tr:hover td{background:var(--bg2)}
 .alert-info{background:var(--accent-bg);color:var(--accent-text)}
 .field-error{font-size:11px;color:var(--danger-text);margin-top:3px}
 .field-row input.error,.field-row textarea.error{border-color:var(--danger-text)!important}
+
+/* Pending sync row indicator */
+tr.row-pending>td:first-child{position:relative}
+tr.row-pending>td:first-child::after{content:'';position:absolute;left:0;top:20%;height:60%;width:3px;border-radius:3px;background:var(--accent);animation:__isdet_sync_pulse 1.5s ease-in-out infinite}
+@keyframes __isdet_sync_pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
@@ -294,6 +299,7 @@ tr:hover td{background:var(--bg2)}
 // For programmatic access (e.g. Claude.ai): call configure({ token: "..." }) manually.
 IsdetTools.configure({});
 IsdetTools.mountSyncStatus(document.getElementById("sync-indicator"));
+IsdetTools.onSyncStatus(() => markPendingRows());
 IsdetTools.onCrossTabWrite(() => load());
 
 const store       = IsdetTools.createStore("costs");
@@ -340,6 +346,25 @@ function renderAll() {
   renderDashboard();
   renderFilters();
   renderUnitCost();
+  markPendingRows();
+}
+
+async function markPendingRows() {
+  const pending = await IsdetTools.getPendingOps();
+  const pendingIds = new Set(
+    pending.filter(op => op.namespace === "costs").map(op => String(op.id))
+  );
+  document.querySelectorAll("tr.row-pending").forEach(tr => {
+    tr.classList.remove("row-pending");
+    tr.title = "";
+  });
+  if (!pendingIds.size) return;
+  document.querySelectorAll("tr[data-record-id]").forEach(tr => {
+    if (pendingIds.has(tr.dataset.recordId)) {
+      tr.classList.add("row-pending");
+      tr.title = "Aguardando sincronização com o servidor";
+    }
+  });
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -757,7 +782,7 @@ function renderSuppliesTable() {
         <button class="btn small danger-btn" onclick="deletePurchase(${p.id})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true"></i></button>
       </td>
     </tr>`).join("");
-    return `<tr>
+    return `<tr data-record-id="${i.id}">
       <td>${expandBtn}</td>
       <td><strong>${i.name}</strong>${i.notes ? `<br><span style="color:var(--text3);font-size:11px">${i.notes}</span>` : ""}</td>
       <td><span class="badge badge-gray">${i.technique}</span></td>
@@ -990,7 +1015,7 @@ function renderSessionsTable() {
     tb.innerHTML = '<tr><td colspan="9" class="empty">Nenhuma sessão registrada ainda.</td></tr>';
     return;
   }
-  tb.innerHTML = sorted.map(s => `<tr>
+  tb.innerHTML = sorted.map(s => `<tr data-record-id="${s.id}">
     <td style="white-space:nowrap">${s.date}</td>
     <td><span class="badge badge-orange">${s.technique}</span></td>
     <td>${s.substrate}</td>
