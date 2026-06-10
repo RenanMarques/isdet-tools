@@ -236,11 +236,7 @@ tr:hover td{background:var(--bg2)}
       <div class="two-col">
         <div class="field-row"><label>Resultado (0–10)</label><input id="ses-score" type="number" min="0" max="10" step="0.5" placeholder="7"></div>
         <div class="field-row"><label>Status</label>
-          <select id="ses-status">
-            <option value="testing">Em teste</option>
-            <option value="validated">Validado</option>
-            <option value="failed">Falhou</option>
-          </select>
+          <select id="ses-status"></select>
         </div>
       </div>
       <div class="field-row"><label>O que funcionou / O que falhou / Próximo ajuste</label><textarea id="ses-observations" placeholder="registro qualitativo da sessão..."></textarea></div>
@@ -494,6 +490,16 @@ function closeSupplyAutocomplete() {
 // ─── Unit autocomplete ────────────────────────────────────────────────────────
 const TECHNIQUES = ["Sublimação","DTF","Serigrafia","Vinil Termocolante","Ilustração com Plotter de Risco","Stencil"];
 const SUBSTRATES  = ["Caneca cerâmica","Caneca polímero","Camiseta poliéster","Placa MDF","Camiseta algodão","Retalho algodão"];
+const SESSION_STATUSES = [
+  { value: "testing",   label: "Em teste", badge: "badge-gray"   },
+  { value: "validated", label: "Validado", badge: "badge-green"  },
+  { value: "failed",    label: "Falhou",   badge: "badge-danger" },
+];
+
+function statusBadge(value) {
+  const s = SESSION_STATUSES.find(x => x.value === value);
+  return s ? `<span class="badge ${s.badge}">${s.label}</span>` : "";
+}
 
 function populateSelect(id, options) {
   const sel = document.getElementById(id);
@@ -984,11 +990,6 @@ function renderSessionsTable() {
     tb.innerHTML = '<tr><td colspan="9" class="empty">Nenhuma sessão registrada ainda.</td></tr>';
     return;
   }
-  const stLabel = {
-    testing:   '<span class="badge badge-gray">Em teste</span>',
-    validated: '<span class="badge badge-green">Validado</span>',
-    failed:    '<span class="badge badge-danger">Falhou</span>',
-  };
   tb.innerHTML = sorted.map(s => `<tr>
     <td style="white-space:nowrap">${s.date}</td>
     <td><span class="badge badge-orange">${s.technique}</span></td>
@@ -997,7 +998,7 @@ function renderSessionsTable() {
     <td>${s.approved} <span style="color:var(--text3);font-size:11px">(${Math.round(s.yieldRate * 100)}%)</span></td>
     <td style="font-variant-numeric:tabular-nums">${fmt(s.totalCost)}</td>
     <td>${s.score !== null ? s.score + "★" : "—"}</td>
-    <td>${stLabel[s.status] || ""}</td>
+    <td>${statusBadge(s.status)}</td>
     <td style="white-space:nowrap">
       <button class="btn small" onclick="viewSession(${s.id})" title="Detalhes"><i class="ti ti-eye" aria-hidden="true"></i></button>
       <button class="btn small danger-btn" onclick="removeSession(${s.id})"><i class="ti ti-trash" aria-hidden="true"></i></button>
@@ -1113,6 +1114,12 @@ populateSelect("ses-technique", TECHNIQUES);
 populateSelect("cp-technique", TECHNIQUES);
 populateSelect("ses-substrate", [...SUBSTRATES, "Outro"]);
 populateSelect("cp-substrate", SUBSTRATES);
+SESSION_STATUSES.forEach(s => {
+  const opt = document.createElement("option");
+  opt.value = s.value;
+  opt.textContent = s.label;
+  document.getElementById("ses-status").appendChild(opt);
+});
 document.querySelectorAll(".field-row select").forEach(initCustomSelect);
 document.getElementById("ins-unit").value = "unidade";
 document.getElementById("ses-date").valueAsDate = new Date();
