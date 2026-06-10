@@ -641,6 +641,43 @@ async function removeSupply(id) {
   renderAll(); renderSessionSupplies();
 }
 
+function openEditSupplyModal(supplyId) {
+  const supply = supplies.find(x => x.id === supplyId);
+  if (!supply) return;
+  document.getElementById("__isdet_edit_supply__")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "__isdet_edit_supply__";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:var(--bg);border-radius:8px;width:min(380px,100%);padding:20px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:14px;font-weight:600">Editar insumo</div>
+        <button onclick="document.getElementById('__isdet_edit_supply__').remove()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:20px;line-height:1" aria-label="Fechar">×</button>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">${supply.name}</div>
+      <div class="field-row" style="margin-bottom:10px"><label>Alerta de estoque mínimo</label><input type="number" id="esp-min-stock" min="0" step="any"></div>
+      <div class="field-row" style="margin-bottom:14px"><label>Notas</label><textarea id="esp-notes" placeholder="marca, fornecedor, observações..." style="min-height:72px"></textarea></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('__isdet_edit_supply__').remove()">Cancelar</button>
+        <button class="btn primary" onclick="saveEditedSupply(${supplyId})">Salvar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById("esp-min-stock").value = supply.minStock || "";
+  document.getElementById("esp-notes").value     = supply.notes || "";
+}
+
+async function saveEditedSupply(supplyId) {
+  const supply = supplies.find(x => x.id === supplyId);
+  if (!supply) return;
+  supply.minStock = parseFloat(document.getElementById("esp-min-stock").value) || 0;
+  supply.notes    = document.getElementById("esp-notes").value.trim();
+  await suppliesCol.save(supply);
+  document.getElementById("__isdet_edit_supply__").remove();
+  renderAll();
+}
+
 function renderSuppliesTable() {
   const tb = document.querySelector("#table-supplies tbody");
   if (!supplies.length) {
@@ -677,7 +714,10 @@ function renderSuppliesTable() {
       <td style="font-variant-numeric:tabular-nums">${fmt(cu)}/${formatUnit(i.unit)}</td>
       <td>${fmtN(i.stock, 1)} ${formatUnit(i.unit)}</td>
       <td>${st}</td>
-      <td><button class="btn small danger-btn" onclick="removeSupply(${i.id})"><i class="ti ti-trash" aria-hidden="true"></i></button></td>
+      <td style="white-space:nowrap">
+        <button class="btn small" onclick="openEditSupplyModal(${i.id})" style="padding:3px 7px;margin-right:2px" title="Editar insumo"><i class="ti ti-pencil" aria-hidden="true"></i></button>
+        <button class="btn small danger-btn" onclick="removeSupply(${i.id})" style="padding:3px 7px"><i class="ti ti-trash" aria-hidden="true"></i></button>
+      </td>
     </tr>
     <tr id="purchase-history-${i.id}" style="display:none">
       <td colspan="7" style="padding:0">${history.length ? `<table style="width:100%;border-collapse:collapse"><tbody>${historyRows}</tbody></table>` : ""}</td>
