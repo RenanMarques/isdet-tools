@@ -809,7 +809,7 @@ async function saveSession() {
       affectedSupplies.push(i);
     }
   });
-  const pieces   = parseFloat(document.getElementById("ses-pieces").value) || 1;
+  const pieces   = parseFloat(document.getElementById("ses-pieces").value) || 0;
   const approved = parseFloat(document.getElementById("ses-approved").value) || 0;
   const newSession = {
     id: Date.now(), date, technique: tec,
