@@ -818,5 +818,11 @@
      * Forces immediate flush of the pending sync queue.
      */
     sync: () => SyncEngine.flush(),
+
+    /**
+     * Returns the current list of pending sync operations (not yet confirmed by the server).
+     * Each entry has: { type, namespace, collection, id, data?, retries, timestamp }
+     */
+    getPendingOps: () => Queue.load(),
   };
 })(window);
