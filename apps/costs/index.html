@@ -836,6 +836,16 @@ async function saveSession() {
 
 async function removeSession(id) {
   if (!confirm("Remover sessão?")) return;
+  const session = sessions.find(s => s.id === id);
+  if (session?.supplies?.length) {
+    for (const used of session.supplies) {
+      const supply = supplies.find(s => s.id === used.supplyId);
+      if (supply) {
+        supply.stock += used.quantity;
+        await suppliesCol.save(supply);
+      }
+    }
+  }
   sessions = sessions.filter(s => s.id !== id);
   await sessionsCol.remove(id);
   renderAll();
