@@ -157,6 +157,11 @@
         err.remote = await r.json();
         throw err;
       }
+      if (r.status === 401) {
+        const err = new Error("auth");
+        err.isAuthError = true;
+        throw err;
+      }
       if (!r.ok) throw new Error(`API ${r.status}`);
       return r.json();
     },
@@ -166,6 +171,11 @@
         method: "DELETE",
         headers: this.headers(),
       });
+      if (r.status === 401) {
+        const err = new Error("auth");
+        err.isAuthError = true;
+        throw err;
+      }
       if (!r.ok) throw new Error(`API ${r.status}`);
       return r.json();
     },
@@ -281,7 +291,9 @@
       this._emit("syncing", { pending: queue.length });
 
       const failed = [];
-      for (const op of queue) {
+      let authExpired = false;
+      for (let qi = 0; qi < queue.length; qi++) {
+        const op = queue[qi];
         try {
           if (op.type === "save") {
             // Check causal dependencies before sending
@@ -341,6 +353,12 @@
               console.warn("[IsdetTools] OCC conflict (no onConflict handler):", op.namespace, op.collection, op.id);
             }
             await Queue.remove(op.namespace, op.collection, op.id);
+          } else if (e.isAuthError) {
+            // Auth expired — re-queue this op and all remaining ones, then stop.
+            // They will flush successfully once the user re-authenticates.
+            for (let ri = qi; ri < queue.length; ri++) failed.push({ ...queue[ri] });
+            authExpired = true;
+            break;
           } else {
             const retries = (op.retries || 0) + 1;
             if (retries < CONFIG.maxRetries) {
@@ -359,7 +377,10 @@
 
       const deadLetters = await DeadLetter.load().catch(() => []);
       const actionable = deadLetters.filter((e) => e.type !== "max_retries");
-      if (failed.length) {
+      if (authExpired) {
+        try { await Queue.save(failed); } catch { /* quota: retry state lost */ }
+        this._emit("auth_expired");
+      } else if (failed.length) {
         try { await Queue.save(failed); } catch { /* quota: retry state lost */ }
         this._emit("error", { pending: failed.length });
       } else {

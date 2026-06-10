@@ -31,6 +31,7 @@
     synced:      { icon: "ti-cloud-check",   text: "Sincronizado",        color: "var(--color-text-success)" },
     error:       { icon: "ti-cloud-x",       text: "Erro na sync",        color: "var(--color-text-danger)" },
     dead_letter: { icon: "ti-alert-octagon", text: "Ação necessária",     color: "var(--color-text-danger)" },
+    auth_expired:{ icon: "ti-lock",          text: "Sessão expirada",     color: "var(--color-text-danger)" },
     quota:       { icon: "ti-database-off",  text: "Armazenamento cheio", color: "var(--color-text-danger)" },
     offline:     { icon: "ti-wifi-off",      text: "Offline",             color: "var(--color-text-secondary)" },
   };
@@ -315,6 +316,10 @@
         el.style.cursor = "pointer";
         el.title = "Clique para resolver conflitos";
         el.onclick = openConflictModal;
+      } else if (status === "auth_expired") {
+        el.style.cursor = "pointer";
+        el.title = "Clique para re-autenticar";
+        el.onclick = () => window.location.reload();
       } else {
         el.style.cursor = "";
         el.title = "";
