@@ -57,7 +57,10 @@ function notFound(request) {
 async function verifyAccessJWT(request, env) {
   if (!env.CF_TEAM_DOMAIN || !env.CF_POLICY_AUD) return false;
 
-  const token = request.headers.get("Cf-Access-Jwt-Assertion");
+  const cookieHeader = request.headers.get("Cookie") || "";
+  const cookieMatch  = cookieHeader.match(/(?:^|;\s*)CF_Authorization=([^;]+)/);
+  const token = request.headers.get("Cf-Access-Jwt-Assertion")
+    ?? (cookieMatch ? cookieMatch[1] : null);
   if (!token) return false;
 
   try {
