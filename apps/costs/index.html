@@ -223,9 +223,7 @@ tr:hover td{background:var(--bg2)}
           <select id="ses-technique" onchange="renderSessionSupplies()"></select>
         </div>
         <div class="field-row"><label>Substrato</label>
-          <select id="ses-substrate">
-            <option>Caneca cerâmica</option><option>Caneca polímero</option><option>Camiseta poliéster</option><option>Placa MDF</option><option>Camiseta algodão</option><option>Retalho algodão</option><option>Outro</option>
-          </select>
+          <select id="ses-substrate"></select>
         </div>
       </div>
       <div class="two-col">
@@ -272,7 +270,6 @@ tr:hover td{background:var(--bg2)}
       <div class="field-row"><label>Substrato</label>
         <select id="cp-substrate" onchange="renderUnitCost()">
           <option value="">— todos —</option>
-          <option>Caneca cerâmica</option><option>Caneca polímero</option><option>Camiseta poliéster</option><option>Placa MDF</option><option>Camiseta algodão</option><option>Retalho algodão</option>
         </select>
       </div>
     </div>
@@ -496,8 +493,9 @@ function closeSupplyAutocomplete() {
 
 // ─── Unit autocomplete ────────────────────────────────────────────────────────
 const TECHNIQUES = ["Sublimação","DTF","Serigrafia","Vinil Termocolante","Ilustração com Plotter de Risco","Stencil"];
+const SUBSTRATES  = ["Caneca cerâmica","Caneca polímero","Camiseta poliéster","Placa MDF","Camiseta algodão","Retalho algodão"];
 
-function populateTechniqueSelect(id, options) {
+function populateSelect(id, options) {
   const sel = document.getElementById(id);
   options.forEach(t => {
     const opt = document.createElement("option");
@@ -1109,10 +1107,12 @@ function calculatePrice() {
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
-populateTechniqueSelect("ins-technique", ["Geral", ...TECHNIQUES]);
+populateSelect("ins-technique", ["Geral", ...TECHNIQUES]);
 document.getElementById("ins-technique").value = "Geral";
-populateTechniqueSelect("ses-technique", TECHNIQUES);
-populateTechniqueSelect("cp-technique", TECHNIQUES);
+populateSelect("ses-technique", TECHNIQUES);
+populateSelect("cp-technique", TECHNIQUES);
+populateSelect("ses-substrate", [...SUBSTRATES, "Outro"]);
+populateSelect("cp-substrate", SUBSTRATES);
 document.querySelectorAll(".field-row select").forEach(initCustomSelect);
 document.getElementById("ins-unit").value = "unidade";
 document.getElementById("ses-date").valueAsDate = new Date();
