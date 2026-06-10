@@ -202,7 +202,7 @@ tr:hover td{background:var(--bg2)}
         </div>
         <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-min-stock" type="number" min="0" step="any"></div>
       </div>
-      <div class="field-row"><label>Notas</label><textarea id="ins-notes" placeholder="marca, fornecedor, observações..."></textarea></div>
+      <div class="field-row"><label id="ins-notes-label">Notas</label><textarea id="ins-notes" placeholder="marca, fornecedor, observações..."></textarea></div>
       <button class="btn primary" onclick="saveSupply()"><i class="ti ti-plus" aria-hidden="true"></i> Cadastrar insumo</button>
     </div>
     <div class="card">
@@ -435,14 +435,18 @@ function fillExistingSupply(existing) {
   document.getElementById("ins-min-stock").value    = existing.minStock || "";
   document.getElementById("ins-min-stock").readOnly = true;
   document.getElementById("ins-notes").value        = "";
-  document.getElementById("ins-notes").value        = existing.notes || "";
+  document.getElementById("ins-notes-label").textContent = "Notas da compra";
+  document.getElementById("ins-notes").placeholder  = "observações sobre esta compra...";
   refreshCustomSelects();
 }
 
-function clearExistingSupply() {
+function clearExistingSupply(clearNotesValue = false) {
   document.getElementById("ins-technique").disabled = false;
   document.getElementById("ins-unit").readOnly      = false;
   document.getElementById("ins-min-stock").readOnly = false;
+  if (clearNotesValue) document.getElementById("ins-notes").value = "";
+  document.getElementById("ins-notes-label").textContent = "Notas";
+  document.getElementById("ins-notes").placeholder  = "marca, fornecedor, observações...";
   refreshCustomSelects();
 }
 
@@ -534,7 +538,7 @@ function clearSupplyName() {
   input.value = "";
   document.getElementById("ins-name-clear").style.display = "none";
   document.getElementById("ins-name-list").classList.remove("open");
-  clearExistingSupply();
+  clearExistingSupply(true);
   syncStockToQuantity();
   input.focus();
 }
