@@ -313,7 +313,24 @@
         } catch (e) {
           if (e.isConflict) {
             // 409 is not a network error — retrying will not help.
-            if (CONFIG.onConflict) {
+            // Trivial conflict: server returned the current data and it's byte-for-byte
+            // identical to what we tried to save. Only the version UUIDs differ (e.g.
+            // two rapid saves of the same edit). Accept the server version silently —
+            // nothing was lost, no user decision needed.
+            if (
+              e.remote?.currentData &&
+              JSON.stringify(op.data) === JSON.stringify(e.remote.currentData)
+            ) {
+              const key = `__isdet__${op.namespace}__${op.collection}__${op.id}`;
+              const existing = await LocalStorage.get(key);
+              await LocalStorage.set(key, {
+                data: e.remote.currentData,
+                _createdAt: existing?._createdAt ?? Date.now(),
+                _updatedAt: Date.now(),
+                _version: e.remote.currentVersion ?? null,
+                _dependsOn: existing?._dependsOn ?? null,
+              }).catch(() => {});
+            } else if (CONFIG.onConflict) {
               CONFIG.onConflict({ op, remote: e.remote });
             } else {
               try {
