@@ -194,14 +194,18 @@ export async function onRequest(context) {
     // OCC check: if client declares an expected version, verify it matches the server
     if (expectedVersion) {
       const current = await env.DB.prepare(
-        "SELECT version FROM records WHERE namespace = ? AND collection = ? AND id = ?"
+        "SELECT data, version FROM records WHERE namespace = ? AND collection = ? AND id = ?"
       )
         .bind(namespace, collection, id)
         .first();
 
       if (current && current.version !== expectedVersion) {
         return response(
-          { error: "conflict", currentVersion: current.version ?? null },
+          {
+            error: "conflict",
+            currentVersion: current.version ?? null,
+            currentData: JSON.parse(current.data),
+          },
           409,
           request
         );

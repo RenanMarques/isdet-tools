@@ -59,6 +59,9 @@
     syncInterval: 30_000,
     retryDelay: 5_000,
     maxRetries: 5,
+    // Minimum time an entry must sit in dead-letter before auto-retry on reconnect.
+    // Prevents tight retry loops when the server is continuously rejecting requests.
+    transientRetryDelay: 2 * 60 * 1000,
     onConflict: null,        // ({ op, remote }) => void
     onCausalConflict: null,  // ({ stale, changedDependency }) => void
   };
@@ -266,8 +269,9 @@
       const queue = await Queue.load();
       if (!queue.length) {
         const deadLetters = await DeadLetter.load().catch(() => []);
-        if (deadLetters.length) {
-          this._emit("dead_letter", { count: deadLetters.length, lastSync: this._lastSync });
+        const actionable = deadLetters.filter((e) => e.type !== "max_retries");
+        if (actionable.length) {
+          this._emit("dead_letter", { count: actionable.length, lastSync: this._lastSync });
         } else {
           this._emit("synced", { lastSync: this._lastSync });
         }
@@ -308,7 +312,7 @@
           await Queue.remove(op.namespace, op.collection, op.id);
         } catch (e) {
           if (e.isConflict) {
-            // 409 is not a network error — retrying will not help
+            // 409 is not a network error — retrying will not help.
             if (CONFIG.onConflict) {
               CONFIG.onConflict({ op, remote: e.remote });
             } else {
@@ -337,13 +341,14 @@
       }
 
       const deadLetters = await DeadLetter.load().catch(() => []);
+      const actionable = deadLetters.filter((e) => e.type !== "max_retries");
       if (failed.length) {
         try { await Queue.save(failed); } catch { /* quota: retry state lost */ }
         this._emit("error", { pending: failed.length });
       } else {
         this._lastSync = new Date();
-        if (deadLetters.length) {
-          this._emit("dead_letter", { count: deadLetters.length, lastSync: this._lastSync });
+        if (actionable.length) {
+          this._emit("dead_letter", { count: actionable.length, lastSync: this._lastSync });
         } else {
           this._emit("synced", { lastSync: this._lastSync });
         }
@@ -355,14 +360,29 @@
 
       // Restore dead-letter state from a previous session
       DeadLetter.load().then((list) => {
-        if (list.length) this._emit("dead_letter", { count: list.length });
+        const actionable = list.filter((e) => e.type !== "max_retries");
+        if (actionable.length) this._emit("dead_letter", { count: actionable.length });
       }).catch(() => {});
 
       this.flush();
       this._timer = setInterval(() => this.flush(), CONFIG.syncInterval);
 
-      window.addEventListener("online", () => this.flush());
-      window.addEventListener("focus", () => this.flush());
+      // max_retries entries represent transient failures (network/server down).
+      // On reconnect, re-enqueue entries old enough to be worth retrying again.
+      const retryTransient = async () => {
+        const list = await DeadLetter.load();
+        const cutoff = Date.now() - CONFIG.transientRetryDelay;
+        const eligible = list.filter((e) => e.type === "max_retries" && e.addedAt < cutoff);
+        if (!eligible.length) return;
+        const eligibleIds = new Set(eligible.map((e) => e.id));
+        for (const entry of eligible) {
+          await Queue.push({ ...entry.op });
+        }
+        await LocalStorage.set(DEAD_LETTER_KEY, list.filter((e) => !eligibleIds.has(e.id)));
+      };
+
+      window.addEventListener("online", async () => { await retryTransient(); this.flush(); });
+      window.addEventListener("focus", async () => { await retryTransient(); this.flush(); });
 
       // Apply writes from other tabs to localStorage so subsequent reads are fresh
       if (_channel) {
@@ -721,6 +741,61 @@
      * Removes a single entry from the dead-letter queue by its id.
      */
     dismissDeadLetterOp: (id) => DeadLetter.dismiss(id),
+
+    /**
+     * Re-enqueues a dead-letter op without the OCC version check (force upsert).
+     * Use when the user chooses to keep their local version over the server's.
+     */
+    forceResave: async (deadLetterId) => {
+      const list = await DeadLetter.load();
+      const entry = list.find((e) => e.id === deadLetterId);
+      if (!entry) return;
+      // Strip expectedVersion so the Worker performs an unconditional upsert.
+      await Queue.push({ ...entry.op, expectedVersion: null });
+      await DeadLetter.dismiss(deadLetterId);
+      SyncEngine.flush();
+    },
+
+    /**
+     * Dismisses a dead-letter conflict entry and, when the 409 response included
+     * the remote data, updates the local cache so the UI reflects the server state
+     * immediately rather than waiting for the next background fetch.
+     * Use when the user chooses to accept the server version over their local edit.
+     */
+    acceptRemoteVersion: async (deadLetterId) => {
+      const list = await DeadLetter.load();
+      const entry = list.find((e) => e.id === deadLetterId);
+      if (!entry) return;
+      if (entry.remote?.currentData) {
+        const key = `__isdet__${entry.op.namespace}__${entry.op.collection}__${entry.op.id}`;
+        const existing = await LocalStorage.get(key);
+        await LocalStorage.set(key, {
+          data: entry.remote.currentData,
+          _createdAt: existing?._createdAt ?? Date.now(),
+          _updatedAt: Date.now(),
+          _version: entry.remote.currentVersion ?? null,
+          _dependsOn: existing?._dependsOn ?? null,
+        }).catch(() => {});
+        if (_channel) {
+          _channel.postMessage({
+            type: "write",
+            namespace: entry.op.namespace,
+            collection: entry.op.collection,
+            id: entry.op.id,
+            key,
+            value: {
+              data: entry.remote.currentData,
+              _createdAt: existing?._createdAt ?? Date.now(),
+              _updatedAt: Date.now(),
+              _version: entry.remote.currentVersion ?? null,
+              _dependsOn: existing?._dependsOn ?? null,
+            },
+          });
+        }
+      }
+      await DeadLetter.dismiss(deadLetterId);
+      SyncEngine.flush();
+    },
 
     /**
      * Forces immediate flush of the pending sync queue.
