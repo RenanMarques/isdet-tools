@@ -123,6 +123,8 @@ tr:hover td{background:var(--bg2)}
 .divider{border:none;border-top:0.5px solid var(--border);margin:1rem 0}
 .alert{font-size:12px;padding:7px 12px;border-radius:var(--rad);margin-bottom:.75rem}
 .alert-info{background:var(--accent-bg);color:var(--accent-text)}
+.field-error{font-size:11px;color:var(--danger-text);margin-top:3px}
+.field-row input.error,.field-row textarea.error{border-color:var(--danger-text)!important}
 </style>
 </head>
 <body>
@@ -320,6 +322,29 @@ const purchasesCol = store.collection("purchases");
 
 // ─── In-memory state ─────────────────────────────────────────────────────────
 let supplies = [], sessions = [], purchases = [], techniqueFilter = "";
+
+function showFieldError(fieldId, msg) {
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  el.classList.add("error");
+  const row = el.closest(".field-row");
+  if (!row) return;
+  let err = row.querySelector(`.field-error[data-for="${fieldId}"]`);
+  if (!err) {
+    err = document.createElement("span");
+    err.className = "field-error";
+    err.dataset.for = fieldId;
+    row.appendChild(err);
+  }
+  err.textContent = msg;
+}
+
+function clearFieldError(fieldId) {
+  const el = document.getElementById(fieldId);
+  if (!el) return;
+  el.classList.remove("error");
+  el.closest(".field-row")?.querySelector(`.field-error[data-for="${fieldId}"]`)?.remove();
+}
 
 async function load() {
   supplies  = await suppliesCol.findAll();
@@ -577,14 +602,17 @@ function resetStockLock() {
 
 // ─── Supplies ─────────────────────────────────────────────────────────────────
 async function saveSupply() {
+  ["ins-name","ins-quantity","ins-price","ins-unit"].forEach(clearFieldError);
+  let valid = true;
   const name = document.getElementById("ins-name").value.trim();
-  if (!name) { alert("Informe o nome do insumo."); return; }
+  if (!name) { showFieldError("ins-name", "Informe o nome do insumo."); valid = false; }
   const quantity = parseFloat(document.getElementById("ins-quantity").value);
-  if (!quantity || quantity <= 0) { alert("Informe uma quantidade comprada maior que zero."); return; }
+  if (!quantity || quantity <= 0) { showFieldError("ins-quantity", "Informe uma quantidade maior que zero."); valid = false; }
   const price = parseFloat(document.getElementById("ins-price").value);
-  if (!price || price <= 0) { alert("Informe um valor pago maior que zero."); return; }
+  if (!price || price <= 0) { showFieldError("ins-price", "Informe um valor pago maior que zero."); valid = false; }
   const unit = document.getElementById("ins-unit").value.trim();
-  if (!unit) { alert("Informe a unidade."); return; }
+  if (!unit) { showFieldError("ins-unit", "Informe a unidade."); valid = false; }
+  if (!valid) return;
   const raw      = parseFloat(document.getElementById("ins-stock").value);
 
   const existing = findExistingByName(name);
@@ -778,13 +806,16 @@ function openEditPurchaseModal(purchaseId) {
 async function saveEditedPurchase(purchaseId) {
   const p       = purchases.find(x => x.id === purchaseId);
   if (!p) return;
+  ["epp-date","epp-quantity","epp-price"].forEach(clearFieldError);
+  let valid = true;
   const date    = document.getElementById("epp-date").value;
+  if (!date) { showFieldError("epp-date", "Informe a data."); valid = false; }
   const qty     = parseFloat(document.getElementById("epp-quantity").value);
+  if (!qty || qty <= 0) { showFieldError("epp-quantity", "Informe uma quantidade maior que zero."); valid = false; }
   const price   = parseFloat(document.getElementById("epp-price").value);
+  if (!price || price <= 0) { showFieldError("epp-price", "Informe um valor pago maior que zero."); valid = false; }
+  if (!valid) return;
   const notes   = document.getElementById("epp-notes").value.trim();
-  if (!date)              { alert("Informe a data."); return; }
-  if (!qty   || qty   <= 0) { alert("Informe uma quantidade maior que zero."); return; }
-  if (!price || price <= 0) { alert("Informe um valor pago maior que zero."); return; }
   const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
   if (supply) {
     supply.quantity = supply.quantity - p.quantity + qty;
@@ -836,8 +867,9 @@ function renderSessionSupplies() {
 }
 
 async function saveSession() {
+  clearFieldError("ses-date");
   const date = document.getElementById("ses-date").value;
-  if (!date) { alert("Informe a data da sessão."); return; }
+  if (!date) { showFieldError("ses-date", "Informe a data da sessão."); return; }
   const tec      = document.getElementById("ses-technique").value;
   const relevant = supplies.filter(i => i.technique === tec || i.technique === "Geral");
   const used     = [];
