@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IsdetArt — Gerador de Poses</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f3;
+    --bg3: #eeede9;
+    --text: #1a1a18;
+    --text2: #555550;
+    --text3: #999990;
+    --border: rgba(0,0,0,0.10);
+    --border2: rgba(0,0,0,0.18);
+    --accent: #D85A30;
+    --accent-bg: #FAECE7;
+    --accent-text: #993C1D;
+    --danger-bg: #fcebeb;
+    --danger-text: #a32d2d;
+    --rad: 8px;
+    --rad-lg: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg2: #252523;
+      --bg3: #2e2e2b;
+      --text: #e8e8e0;
+      --text2: #aaa9a0;
+      --text3: #666660;
+      --border: rgba(255,255,255,0.10);
+      --border2: rgba(255,255,255,0.18);
+      --accent-bg: #3d1f13;
+      --accent-text: #e8906a;
+      --danger-bg: #2e1515;
+      --danger-text: #f09595;
+    }
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg3);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    font-size: 15px;
+  }
+
+  .container { max-width: 720px; margin: 0 auto; }
+
+  .app-header { margin-bottom: 2rem; }
+  .app-header h1 {
+    font-size: 20px; font-weight: 500; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .app-header h1 i { color: var(--accent); font-size: 20px; }
+  .app-header p { font-size: 13px; color: var(--text2); margin-top: 5px; line-height: 1.5; }
+
+  .card {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--rad-lg); padding: 1.25rem; margin-bottom: 1rem;
+  }
+
+  .section-label {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text3);
+    margin-bottom: 0.6rem; display: flex; align-items: center; gap: 5px;
+  }
+
+  /* API Key */
+  .api-key-row {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 12px; background: var(--bg2);
+    border-radius: var(--rad); border: 0.5px solid var(--border);
+  }
+  .api-key-row > i { color: var(--text3); font-size: 16px; flex-shrink: 0; }
+  .api-key-row input {
+    flex: 1; border: none; background: transparent;
+    font-size: 13px; font-family: var(--mono);
+    color: var(--text); outline: none; min-width: 0;
+  }
+  .api-key-row input::placeholder { color: var(--text3); }
+  .key-note {
+    font-size: 11px; color: var(--text3); margin-top: 6px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  /* Personagem */
+  .char-input-wrap {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 12px; background: var(--bg2);
+    border-radius: var(--rad); border: 0.5px solid var(--border);
+    transition: border-color 0.15s;
+  }
+  .char-input-wrap:focus-within { border-color: var(--accent); }
+  .char-input-wrap > i { color: var(--text3); font-size: 17px; flex-shrink: 0; }
+  .char-input-wrap input {
+    flex: 1; border: none; background: transparent;
+    font-size: 15px; color: var(--text); outline: none; min-width: 0;
+  }
+  .char-input-wrap input::placeholder { color: var(--text3); }
+  .examples {
+    font-size: 11px; color: var(--text3); margin-top: 8px; line-height: 1.6;
+  }
+  .examples b { color: var(--text2); font-weight: 500; }
+  .example-pill {
+    display: inline-block; cursor: pointer;
+    border: 0.5px solid var(--border2); border-radius: 99px;
+    padding: 2px 9px; margin: 3px 4px 0 0; color: var(--text2);
+    background: var(--bg2); transition: color .1s, border-color .1s;
+  }
+  .example-pill:hover { color: var(--accent-text); border-color: var(--accent); }
+
+  /* Campos opcionais */
+  .field-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 0.875rem; }
+  .field-row:last-child { margin-bottom: 0; }
+  .field-row label { font-size: 13px; color: var(--text2); }
+  .field-row textarea {
+    font-size: 13px; line-height: 1.5; resize: vertical; min-height: 44px;
+    font-family: var(--font); background: var(--bg2);
+    border: 0.5px solid var(--border); border-radius: var(--rad);
+    padding: 8px 10px; color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .field-row textarea:focus { border-color: var(--border2); }
+
+  .config-row { display: flex; flex-direction: column; gap: 6px; }
+  .config-row label { font-size: 13px; color: var(--text2); }
+  .config-row select {
+    font-size: 13px; padding: 8px 10px; width: 100%;
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: var(--rad); color: var(--text); outline: none;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .config-row select:focus { border-color: var(--border2); }
+  .field-hint { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 2px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 520px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Botão */
+  .analyze-btn {
+    width: 100%; padding: 12px; font-size: 14px; font-weight: 500; cursor: pointer;
+    background: var(--accent); color: #fff; border: none; border-radius: var(--rad);
+    transition: opacity 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    margin-top: 0.5rem;
+  }
+  .analyze-btn:hover { opacity: 0.88; }
+  .analyze-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .status {
+    font-size: 13px; color: var(--text2); margin-top: 10px; min-height: 20px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--border2);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    font-size: 13px; color: var(--danger-text); padding: 8px 12px;
+    background: var(--danger-bg); border-radius: var(--rad);
+    display: none; margin-top: 8px;
+  }
+
+  /* Resultado — leitura do personagem */
+  .read-card {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--rad-lg); overflow: hidden; margin-top: 1.5rem;
+  }
+  .read-header {
+    padding: 12px 16px; background: var(--bg2);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .read-header .who { min-width: 0; }
+  .read-header .name {
+    font-size: 15px; font-weight: 600; color: var(--text);
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .read-header .name i { color: var(--accent); font-size: 16px; flex-shrink: 0; }
+  .read-header .work { font-size: 12px; color: var(--text3); margin-top: 1px; }
+  .read-body { padding: 14px 16px; }
+  .read-summary { font-size: 13px; line-height: 1.6; color: var(--text); }
+
+  .traits { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+  .trait {
+    font-size: 12px; padding: 3px 10px; border-radius: 99px;
+    background: var(--accent-bg); color: var(--accent-text);
+    border: 0.5px solid transparent;
+  }
+
+  /* Poses */
+  .poses-meta {
+    margin: 1.25rem 0 0.5rem; display: flex; align-items: center;
+    justify-content: space-between; gap: 10px;
+  }
+  .poses-meta .label {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text3);
+    display: flex; align-items: center; gap: 5px;
+  }
+  .copy-btn {
+    font-size: 12px; color: var(--text2); background: none;
+    border: 0.5px solid var(--border2); border-radius: var(--rad);
+    padding: 4px 11px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 4px; transition: color 0.1s;
+  }
+  .copy-btn:hover { color: var(--text); }
+
+  .pose {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--rad-lg); padding: 1rem 1.1rem; margin-bottom: 0.75rem;
+    position: relative;
+  }
+  .pose-top {
+    display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px;
+  }
+  .pose-num {
+    font-family: var(--mono); font-size: 12px; font-weight: 600;
+    color: #fff; background: var(--accent); flex-shrink: 0;
+    width: 22px; height: 22px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; margin-top: 1px;
+  }
+  .pose-headings { flex: 1; min-width: 0; }
+  .pose-title { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.3; }
+  .pose-cat {
+    display: inline-block; margin-top: 4px;
+    font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--text2); background: var(--bg3);
+    border: 0.5px solid var(--border); border-radius: 99px; padding: 2px 8px;
+  }
+  .pose-desc { font-size: 13px; line-height: 1.55; color: var(--text); }
+  .pose-why {
+    font-size: 12px; line-height: 1.55; color: var(--text2);
+    margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--accent);
+  }
+  .pose-why b { color: var(--accent-text); font-weight: 600; }
+  .pose-prompt-wrap { margin-top: 10px; }
+  .pose-prompt-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text3); margin-bottom: 4px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .pose-prompt {
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: var(--rad); padding: 9px 11px;
+    font-size: 12px; font-family: var(--mono); line-height: 1.6;
+    color: var(--text); word-break: break-word;
+  }
+  .mini-copy {
+    background: none; border: none; cursor: pointer; padding: 0;
+    color: var(--text3); font-size: 11px; display: inline-flex;
+    align-items: center; gap: 3px; transition: color .1s; text-transform: none; letter-spacing: 0;
+  }
+  .mini-copy:hover { color: var(--accent-text); }
+
+  /* Evitar */
+  .avoid-card {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--rad-lg); padding: 1rem 1.1rem; margin-top: 1.25rem;
+  }
+  .avoid-title {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .avoid-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+  .avoid-list li {
+    font-size: 13px; line-height: 1.5; color: var(--text2);
+    display: flex; align-items: flex-start; gap: 7px;
+  }
+  .avoid-list li i { color: var(--danger-text); font-size: 14px; margin-top: 2px; flex-shrink: 0; }
+
+  .icon-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text3); font-size: 18px; line-height: 1;
+    padding: 2px; display: flex; align-items: center; transition: color 0.1s;
+  }
+  .icon-btn:hover { color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="app-header">
+    <h1><i class="ti ti-body-scan"></i> Gerador de Poses — IsdetArt</h1>
+    <p>Você nomeia um personagem; a ferramenta lê personalidade e lore e devolve poses que combinam com ele — com o porquê de cada uma e um trecho de prompt pronto pro OpenArt.</p>
+  </header>
+
+  <!-- API Key -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-key" style="font-size:13px"></i> API Key</div>
+    <div class="api-key-row">
+      <i class="ti ti-lock" aria-hidden="true"></i>
+      <input type="password" id="api-key" placeholder="sk-ant-…  (Anthropic API key)" autocomplete="off" spellcheck="false">
+      <button class="icon-btn" id="toggle-key" aria-label="Mostrar/ocultar chave">
+        <i class="ti ti-eye" id="eye-icon"></i>
+      </button>
+    </div>
+    <p class="key-note">
+      <i class="ti ti-shield-lock" style="font-size:12px"></i>
+      Usada só nesta sessão. Some ao fechar a aba. Obtenha em console.anthropic.com → API Keys.
+    </p>
+  </div>
+
+  <!-- Personagem -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-user-star" style="font-size:13px"></i> Personagem</div>
+    <div class="char-input-wrap">
+      <i class="ti ti-search" aria-hidden="true"></i>
+      <input type="text" id="char-input" placeholder="ex: Capitão Yamamoto de Bleach" spellcheck="false">
+    </div>
+    <div class="examples">
+      <b>Inclua a obra</b> pra evitar ambiguidade. Toque para testar:
+      <br>
+      <span class="example-pill">Capitão Yamamoto de Bleach</span>
+      <span class="example-pill">4º Hokage de Naruto Shippuden</span>
+      <span class="example-pill">Ranger Vermelho de Power Rangers</span>
+      <span class="example-pill">Guts de Berserk</span>
+    </div>
+  </div>
+
+  <!-- Configurações -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-adjustments" style="font-size:13px"></i> Ajustes (opcional)</div>
+
+    <div class="field-row">
+      <label>Contexto / enquadramento desejado</label>
+      <textarea id="ctx-frame" placeholder="ex: corpo inteiro, plano dinâmico para estampa de camiseta; ou retrato meio-corpo, fundo neutro..."></textarea>
+    </div>
+
+    <div class="two-col">
+      <div class="config-row">
+        <label for="count-select">Quantas poses</label>
+        <select id="count-select">
+          <option value="4">4 poses</option>
+          <option value="6" selected>6 poses</option>
+          <option value="8">8 poses</option>
+        </select>
+      </div>
+      <div class="config-row">
+        <label for="lang-select">Idioma das descrições</label>
+        <select id="lang-select">
+          <option value="pt" selected>Português (prompt em inglês)</option>
+          <option value="en">Tudo em inglês</option>
+        </select>
+      </div>
+    </div>
+    <p class="field-hint" style="margin-top:10px">O trecho de prompt sai sempre em inglês (formato do OpenArt) e descreve só a <b>pose / linguagem corporal / enquadramento</b> — pra você juntar ao seu prompt de personagem + estilo.</p>
+  </div>
+
+  <button class="analyze-btn" id="analyze-btn" disabled>
+    <i class="ti ti-sparkles" style="font-size:15px"></i> Sugerir poses
+  </button>
+  <div class="error-msg" id="error-msg"></div>
+  <div class="status" id="status"></div>
+  <div id="result-area"></div>
+
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const apiKeyInput = $('api-key'), toggleKey = $('toggle-key'), eyeIcon = $('eye-icon');
+const charInput = $('char-input');
+const analyzeBtn = $('analyze-btn'), statusEl = $('status');
+const resultArea = $('result-area'), errorMsg = $('error-msg');
+
+// --- API Key toggle ---
+toggleKey.onclick = () => {
+  const show = apiKeyInput.type === 'password';
+  apiKeyInput.type = show ? 'text' : 'password';
+  eyeIcon.className = show ? 'ti ti-eye-off' : 'ti ti-eye';
+};
+
+// --- Exemplos clicáveis ---
+document.querySelectorAll('.example-pill').forEach(p => {
+  p.addEventListener('click', () => { charInput.value = p.textContent; updateBtn(); charInput.focus(); });
+});
+
+// --- Habilitar botão ---
+function updateBtn() {
+  analyzeBtn.disabled = !charInput.value.trim() || !apiKeyInput.value.trim();
+}
+apiKeyInput.addEventListener('input', updateBtn);
+charInput.addEventListener('input', updateBtn);
+charInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !analyzeBtn.disabled) { e.preventDefault(); analyzeBtn.click(); }
+});
+
+// --- Status / erro ---
+function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+function hideError() { errorMsg.style.display = 'none'; }
+function setStatus(msg, spin = false) {
+  statusEl.innerHTML = msg ? (spin ? '<div class="spinner"></div>' : '') + `<span>${msg}</span>` : '';
+}
+
+// --- Escape básico ---
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// --- Prompt enviado ao modelo ---
+function buildPrompt() {
+  const character = charInput.value.trim();
+  const frame = $('ctx-frame').value.trim();
+  const count = $('count-select').value;
+  const lang = $('lang-select').value;
+
+  const descLang = lang === 'en'
+    ? 'Write "resumo", "tracos_chave", "poses[].titulo", "poses[].descricao", "poses[].porque" and "evitar" in ENGLISH.'
+    : 'Write "resumo", "tracos_chave", "poses[].titulo", "poses[].descricao", "poses[].porque" and "evitar" in BRAZILIAN PORTUGUESE.';
+
+  let frameLine = '';
+  if (frame) frameLine = `\nO usuário pediu este contexto/enquadramento, respeite-o nas poses e nos prompts: "${frame}"`;
+
+  return `Você é um diretor de arte e especialista em design de personagens. Sua tarefa é sugerir poses para a geração de uma ILUSTRAÇÃO por IA de um personagem específico, fugindo de poses genéricas.
+
+PERSONAGEM PEDIDO: "${character}"
+
+Use seu conhecimento sobre a personalidade, papel na história (lore), estilo de luta, postura típica, técnicas/golpes de assinatura, atributos físicos e iconografia desse personagem. Se houver mais de um personagem com esse nome, escolha o mais provável pela obra citada. Se você não tiver certeza de quem é, faça a melhor inferência possível e SINALIZE essa incerteza no campo "resumo".
+
+Gere exatamente ${count} poses. Cada pose deve ser ESPECÍFICA para este personagem — derivada de quem ele é, não uma pose que serviria pra qualquer um. Varie entre as categorias (não repita a mesma): "Assinatura" (golpe/postura icônica), "Combate", "Atitude/Retrato", "Caráter/Cotidiano", "Dramática/Narrativa". Equilibre poses de ação com momentos mais quietos que revelem a personalidade.
+
+REGRAS IMPORTANTES:
+- O campo "prompt_en" é um FRAGMENTO de prompt em INGLÊS que descreve APENAS a pose, a linguagem corporal, a expressão facial, o ângulo de câmera e o enquadramento. NÃO descreva roupas, cores, cenário detalhado, nem repita o nome do personagem — isso o usuário acrescenta separadamente. 12 a 35 palavras.
+- O campo "porque" explica, em 1-2 frases, POR QUE essa pose combina com este personagem (ligando a um traço de personalidade, lore ou golpe). É o coração da ferramenta.
+- NÃO reproduza arte, falas, ou descrições copiadas de cenas existentes; descreva poses como ideias funcionais.
+${descLang}${frameLine}
+
+Responda APENAS com o JSON no formato EXATO abaixo. Sem texto antes ou depois, sem blocos de código markdown.
+
+{
+  "personagem": "nome canônico do personagem",
+  "obra": "obra/franquia de origem",
+  "resumo": "2-3 frases sobre quem é o personagem e o que define sua presença física/atitude",
+  "tracos_chave": ["3-5 traços que devem guiar as poses"],
+  "poses": [
+    {
+      "titulo": "nome curto e evocativo da pose",
+      "categoria": "Assinatura | Combate | Atitude/Retrato | Caráter/Cotidiano | Dramática/Narrativa",
+      "descricao": "1-2 frases descrevendo a pose",
+      "porque": "por que essa pose combina com ESTE personagem",
+      "prompt_en": "fragmento de prompt em inglês (só pose/corpo/expressão/enquadramento)"
+    }
+  ],
+  "evitar": ["3-4 poses ou clichês que ficariam genéricos ou fora do personagem"]
+}`;
+}
+
+// --- Copiar ---
+function copyText(txt, btn) {
+  navigator.clipboard.writeText(txt).then(() => {
+    if (!btn) return;
+    const o = btn.innerHTML;
+    btn.innerHTML = '<i class="ti ti-check" style="font-size:12px"></i> Copiado';
+    setTimeout(() => { btn.innerHTML = o; }, 1700);
+  });
+}
+
+// --- Render ---
+function renderResult(ds) {
+  const poses = Array.isArray(ds.poses) ? ds.poses : [];
+  const traits = Array.isArray(ds.tracos_chave) ? ds.tracos_chave : [];
+  const avoid = Array.isArray(ds.evitar) ? ds.evitar : [];
+
+  let html = `
+  <div class="read-card">
+    <div class="read-header">
+      <div class="who">
+        <div class="name"><i class="ti ti-user-star"></i>${esc(ds.personagem || charInput.value.trim())}</div>
+        ${ds.obra ? `<div class="work">${esc(ds.obra)}</div>` : ''}
+      </div>
+    </div>
+    <div class="read-body">
+      <div class="read-summary">${esc(ds.resumo || '')}</div>
+      ${traits.length ? `<div class="traits">${traits.map(t => `<span class="trait">${esc(t)}</span>`).join('')}</div>` : ''}
+    </div>
+  </div>
+
+  <div class="poses-meta">
+    <div class="label"><i class="ti ti-list-details" style="font-size:13px"></i> ${poses.length} poses sugeridas</div>
+    <button class="copy-btn" id="cp-all"><i class="ti ti-copy" style="font-size:12px"></i> Copiar todos os prompts</button>
+  </div>`;
+
+  poses.forEach((p, i) => {
+    const promptId = `pp-${i}`;
+    html += `
+    <div class="pose">
+      <div class="pose-top">
+        <div class="pose-num">${i + 1}</div>
+        <div class="pose-headings">
+          <div class="pose-title">${esc(p.titulo || 'Pose')}</div>
+          ${p.categoria ? `<span class="pose-cat">${esc(p.categoria)}</span>` : ''}
+        </div>
+      </div>
+      ${p.descricao ? `<div class="pose-desc">${esc(p.descricao)}</div>` : ''}
+      ${p.porque ? `<div class="pose-why"><b>Por quê:</b> ${esc(p.porque)}</div>` : ''}
+      ${p.prompt_en ? `
+      <div class="pose-prompt-wrap">
+        <div class="pose-prompt-label">
+          <span>Prompt (EN)</span>
+          <button class="mini-copy" data-copy="${promptId}"><i class="ti ti-copy"></i> copiar</button>
+        </div>
+        <div class="pose-prompt" id="${promptId}">${esc(p.prompt_en)}</div>
+      </div>` : ''}
+    </div>`;
+  });
+
+  if (avoid.length) {
+    html += `
+    <div class="avoid-card">
+      <div class="avoid-title"><i class="ti ti-circle-off" style="font-size:13px"></i> Evitar (genérico / fora do personagem)</div>
+      <ul class="avoid-list">
+        ${avoid.map(a => `<li><i class="ti ti-x"></i><span>${esc(a)}</span></li>`).join('')}
+      </ul>
+    </div>`;
+  }
+
+  resultArea.innerHTML = html;
+
+  // Bind copies
+  document.querySelectorAll('.mini-copy').forEach(btn => {
+    btn.onclick = () => {
+      const el = $(btn.getAttribute('data-copy'));
+      if (el) copyText(el.textContent, btn);
+    };
+  });
+  const cpAll = $('cp-all');
+  if (cpAll) {
+    cpAll.onclick = () => {
+      const all = poses.map((p, i) => `${i + 1}. ${p.titulo || ''}\n${p.prompt_en || ''}`).join('\n\n');
+      copyText(all, cpAll);
+    };
+  }
+
+  resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// --- Analisar ---
+analyzeBtn.addEventListener('click', async () => {
+  const key = apiKeyInput.value.trim();
+  if (!key) { showError('Insira a API key antes de continuar.'); return; }
+  if (!charInput.value.trim()) { showError('Digite um personagem.'); return; }
+
+  hideError(); resultArea.innerHTML = '';
+  analyzeBtn.disabled = true;
+  setStatus('Lendo o personagem e montando as poses…', true);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: buildPrompt() }]
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || `Erro ${res.status}`);
+    if (data.stop_reason === 'max_tokens') throw new Error('Resposta cortada pelo limite de tokens. Tente menos poses.');
+
+    const raw = (data.content || []).map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    let ds;
+    try { ds = JSON.parse(clean); }
+    catch (e) { throw new Error('Resposta fora do formato esperado. Tente novamente.'); }
+
+    setStatus('');
+    renderResult(ds);
+  } catch (e) {
+    setStatus('');
+    showError(e.message || 'Erro desconhecido.');
+  } finally {
+    updateBtn();
+  }
+});
+</script>
+</body>
+</html>
