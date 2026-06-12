@@ -103,6 +103,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);padding:6px 10px;border-bottom:0.5px solid var(--border)}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--text2)}
+th.sort-active{color:var(--text)!important}
 td{padding:7px 10px;border-bottom:0.5px solid var(--border);color:var(--text);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--bg2)}
@@ -209,6 +212,7 @@ tr.row-pending>td:first-child::after{content:'';position:absolute;left:0;top:20%
     </div>
     <div class="card">
       <div class="section-label">Insumos cadastrados</div>
+      <div style="margin-bottom:.75rem"><input id="supplies-search" type="search" placeholder="Filtrar por nome…" oninput="onSuppliesSearch()" style="font-size:12px;padding:6px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);outline:none;width:100%;max-width:260px"></div>
       <div class="table-wrap">
         <table id="table-supplies">
           <thead><tr><th style="width:28px"></th><th>Nome</th><th>Técnica</th><th>Custo unitário</th><th>Estoque</th><th>Status</th><th></th></tr></thead>
@@ -249,7 +253,8 @@ tr.row-pending>td:first-child::after{content:'';position:absolute;left:0;top:20%
     </div>
     <div class="card">
       <div class="section-label">Histórico de sessões</div>
-      <div class="chip-row" id="session-filters" style="margin-bottom:.75rem"></div>
+      <div class="chip-row" id="session-filters" style="margin-bottom:.5rem"></div>
+      <div class="chip-row" id="session-status-filters" style="margin-bottom:.75rem"></div>
       <div class="table-wrap">
         <table id="table-sessions">
           <thead><tr><th>Data</th><th>Técnica</th><th>Substrato</th><th>Peças</th><th>Aprovadas</th><th>Custo sessão</th><th>Nota</th><th>Status</th><th></th></tr></thead>
@@ -309,6 +314,8 @@ const purchasesCol = store.collection("purchases");
 
 // ─── In-memory state ─────────────────────────────────────────────────────────
 let supplies = [], sessions = [], purchases = [], techniqueFilter = "";
+let suppliesSortCol = "name", suppliesSortDir = "asc", suppliesSearch = "";
+let sessionsSortCol = "date", sessionsSortDir = "desc", sessionsStatusFilter = "";
 
 function showFieldError(fieldId, msg) {
   const el = document.getElementById(fieldId);
@@ -794,13 +801,97 @@ async function saveEditedSupply(supplyId) {
   renderSessionSupplies();
 }
 
+function suppliesTh(col, label) {
+  const active = suppliesSortCol === col;
+  const arrow = active ? (suppliesSortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  return `<th class="sortable${active ? ' sort-active' : ''}" onclick="setSuppliesSort('${col}')">${label}${active ? `<span style="color:var(--accent)">${arrow}</span>` : ''}</th>`;
+}
+
+function sessionsTh(col, label) {
+  const active = sessionsSortCol === col;
+  const arrow = active ? (sessionsSortDir === 'asc' ? ' ↑' : ' ↓') : '';
+  return `<th class="sortable${active ? ' sort-active' : ''}" onclick="setSessionsSort('${col}')">${label}${active ? `<span style="color:var(--accent)">${arrow}</span>` : ''}</th>`;
+}
+
+function setSuppliesSort(col) {
+  if (suppliesSortCol === col) suppliesSortDir = suppliesSortDir === 'asc' ? 'desc' : 'asc';
+  else { suppliesSortCol = col; suppliesSortDir = 'asc'; }
+  renderSuppliesTable();
+}
+
+function setSessionsSort(col) {
+  if (sessionsSortCol === col) sessionsSortDir = sessionsSortDir === 'asc' ? 'desc' : 'asc';
+  else { sessionsSortCol = col; sessionsSortDir = col === 'date' ? 'desc' : 'asc'; }
+  renderSessionsTable();
+}
+
+function onSuppliesSearch() {
+  suppliesSearch = document.getElementById("supplies-search").value.trim().toLowerCase();
+  renderSuppliesTable();
+}
+
+function setSessionsStatusFilter(v) {
+  sessionsStatusFilter = v;
+  renderFilters();
+  renderSessionsTable();
+}
+
+function appliedSupplies() {
+  let list = supplies;
+  if (suppliesSearch) list = list.filter(i => i.name.toLowerCase().includes(suppliesSearch));
+  return [...list].sort((a, b) => {
+    let av, bv;
+    switch (suppliesSortCol) {
+      case 'technique':   av = techniqueLabel(a.technique); bv = techniqueLabel(b.technique); break;
+      case 'costPerUnit': av = costPerUnit(a);              bv = costPerUnit(b);              break;
+      case 'stock':       av = a.stock;                     bv = b.stock;                     break;
+      case 'status':      av = (a.minStock > 0 && a.stock <= a.minStock) ? 0 : 1; bv = (b.minStock > 0 && b.stock <= b.minStock) ? 0 : 1; break;
+      default:            av = a.name.toLowerCase();        bv = b.name.toLowerCase();
+    }
+    const d = suppliesSortDir === 'asc' ? 1 : -1;
+    return av < bv ? -d : av > bv ? d : 0;
+  });
+}
+
+function appliedSessions() {
+  let list = sessions;
+  if (techniqueFilter) list = list.filter(s => s.technique === techniqueFilter);
+  if (sessionsStatusFilter) list = list.filter(s => s.status === sessionsStatusFilter);
+  return [...list].sort((a, b) => {
+    let av, bv;
+    switch (sessionsSortCol) {
+      case 'technique': av = techniqueLabel(a.technique); bv = techniqueLabel(b.technique); break;
+      case 'substrate': av = a.substrate;                 bv = b.substrate;                 break;
+      case 'pieces':    av = a.pieces;                    bv = b.pieces;                    break;
+      case 'approved':  av = a.approved;                  bv = b.approved;                  break;
+      case 'totalCost': av = a.totalCost;                 bv = b.totalCost;                 break;
+      case 'score':     av = a.score ?? -1;               bv = b.score ?? -1;               break;
+      case 'status':    av = a.status;                    bv = b.status;                    break;
+      default:          av = a.date;                      bv = b.date;
+    }
+    const d = sessionsSortDir === 'asc' ? 1 : -1;
+    return av < bv ? -d : av > bv ? d : 0;
+  });
+}
+
 function renderSuppliesTable() {
-  const tb = document.querySelector("#table-supplies tbody");
-  if (!supplies.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">Nenhum insumo cadastrado ainda.</td></tr>';
+  const table = document.getElementById("table-supplies");
+  table.querySelector("thead").innerHTML = `<tr>
+    <th style="width:28px"></th>
+    ${suppliesTh('name', 'Nome')}
+    ${suppliesTh('technique', 'Técnica')}
+    ${suppliesTh('costPerUnit', 'Custo unitário')}
+    ${suppliesTh('stock', 'Estoque')}
+    ${suppliesTh('status', 'Status')}
+    <th></th>
+  </tr>`;
+  const tb = table.querySelector("tbody");
+  const list = appliedSupplies();
+  if (!list.length) {
+    tb.innerHTML = `<tr><td colspan="7" class="empty">${supplies.length ? 'Nenhum insumo corresponde à busca.' : 'Nenhum insumo cadastrado ainda.'}</td></tr>`;
     return;
   }
-  tb.innerHTML = supplies.map(i => {
+  tb.innerHTML = list.map(i => {
     const cu      = costPerUnit(i);
     const isLow   = i.minStock > 0 && i.stock <= i.minStock;
     const st      = isLow
@@ -1035,22 +1126,41 @@ function viewSession(id) {
 function setFilter(v) { techniqueFilter = v; renderFilters(); renderSessionsTable(); }
 
 function renderFilters() {
-  const wrap = document.getElementById("session-filters");
-  wrap.innerHTML = "";
+  const techWrap = document.getElementById("session-filters");
+  techWrap.innerHTML = "";
   [{ id: "", label: "Todas" }, ...TECHNIQUES].forEach(t => {
-    const sel  = techniqueFilter === t.id;
     const chip = document.createElement("span");
-    chip.className = "chip" + (sel ? " sel" : "");
+    chip.className = "chip" + (techniqueFilter === t.id ? " sel" : "");
     chip.textContent = t.label;
     chip.onclick = () => setFilter(t.id);
-    wrap.appendChild(chip);
+    techWrap.appendChild(chip);
+  });
+  const statusWrap = document.getElementById("session-status-filters");
+  statusWrap.innerHTML = "";
+  [{ value: "", label: "Todos status" }, ...SESSION_STATUSES].forEach(s => {
+    const chip = document.createElement("span");
+    chip.className = "chip" + (sessionsStatusFilter === s.value ? " sel" : "");
+    chip.textContent = s.label;
+    chip.onclick = () => setSessionsStatusFilter(s.value);
+    statusWrap.appendChild(chip);
   });
 }
 
 function renderSessionsTable() {
-  const tb     = document.querySelector("#table-sessions tbody");
-  const list   = techniqueFilter ? sessions.filter(s => s.technique === techniqueFilter) : sessions;
-  const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
+  const table = document.getElementById("table-sessions");
+  table.querySelector("thead").innerHTML = `<tr>
+    ${sessionsTh('date', 'Data')}
+    ${sessionsTh('technique', 'Técnica')}
+    ${sessionsTh('substrate', 'Substrato')}
+    ${sessionsTh('pieces', 'Peças')}
+    ${sessionsTh('approved', 'Aprovadas')}
+    ${sessionsTh('totalCost', 'Custo sessão')}
+    ${sessionsTh('score', 'Nota')}
+    ${sessionsTh('status', 'Status')}
+    <th></th>
+  </tr>`;
+  const tb = table.querySelector("tbody");
+  const sorted = appliedSessions();
   if (!sorted.length) {
     tb.innerHTML = '<tr><td colspan="9" class="empty">Nenhuma sessão registrada ainda.</td></tr>';
     return;
