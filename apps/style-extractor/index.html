@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IsdetArt — Extrator de Estilo</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f3;
+    --bg3: #eeede9;
+    --text: #1a1a18;
+    --text2: #555550;
+    --text3: #999990;
+    --border: rgba(0,0,0,0.10);
+    --border2: rgba(0,0,0,0.18);
+    --accent: #D85A30;
+    --accent-bg: #FAECE7;
+    --accent-text: #993C1D;
+    --danger-bg: #fcebeb;
+    --danger-text: #a32d2d;
+    --rad: 8px;
+    --rad-lg: 12px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a;
+      --bg2: #252523;
+      --bg3: #2e2e2b;
+      --text: #e8e8e0;
+      --text2: #aaa9a0;
+      --text3: #666660;
+      --border: rgba(255,255,255,0.10);
+      --border2: rgba(255,255,255,0.18);
+      --accent-bg: #3d1f13;
+      --accent-text: #e8906a;
+      --danger-bg: #2e1515;
+      --danger-text: #f09595;
+    }
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg3);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem 1rem;
+    font-size: 15px;
+  }
+
+  .container { max-width: 680px; margin: 0 auto; }
+
+  .app-header { margin-bottom: 2rem; }
+  .app-header h1 {
+    font-size: 20px; font-weight: 500; letter-spacing: -0.01em;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .app-header h1 i { color: var(--accent); font-size: 20px; }
+  .app-header p { font-size: 13px; color: var(--text2); margin-top: 5px; line-height: 1.5; }
+
+  .card {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--rad-lg); padding: 1.25rem; margin-bottom: 1rem;
+  }
+
+  .section-label {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text3);
+    margin-bottom: 0.6rem; display: flex; align-items: center; gap: 5px;
+  }
+
+  /* API Key */
+  .api-key-row {
+    display: flex; gap: 8px; align-items: center;
+    padding: 10px 12px; background: var(--bg2);
+    border-radius: var(--rad); border: 0.5px solid var(--border);
+  }
+  .api-key-row i { color: var(--text3); font-size: 16px; flex-shrink: 0; }
+  .api-key-row input {
+    flex: 1; border: none; background: transparent;
+    font-size: 13px; font-family: var(--mono);
+    color: var(--text); outline: none; min-width: 0;
+  }
+  .api-key-row input::placeholder { color: var(--text3); }
+  .key-note {
+    font-size: 11px; color: var(--text3); margin-top: 6px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  /* Drop zone */
+  .drop-zone {
+    border: 1.5px dashed var(--border2); border-radius: var(--rad-lg);
+    padding: 2rem 1.5rem; text-align: center; cursor: pointer;
+    background: var(--bg2); position: relative;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--accent-bg); }
+  .drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .drop-icon { font-size: 30px; color: var(--text2); margin-bottom: 8px; }
+  .drop-label { font-size: 14px; color: var(--text2); }
+  .drop-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+
+  .thumbs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 1rem; }
+  .thumb-wrap {
+    position: relative; width: 80px; height: 80px;
+    border-radius: var(--rad); overflow: hidden; border: 0.5px solid var(--border);
+  }
+  .thumb-wrap img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb-remove {
+    position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,0.6);
+    border: none; border-radius: 50%; width: 20px; height: 20px;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 12px;
+  }
+
+  /* Campos de texto */
+  .field-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 0.875rem; }
+  .field-row:last-child { margin-bottom: 0; }
+  .field-row label { font-size: 13px; color: var(--text2); }
+  .field-row textarea {
+    font-size: 13px; line-height: 1.5; resize: vertical; min-height: 60px;
+    font-family: var(--mono); background: var(--bg2);
+    border: 0.5px solid var(--border); border-radius: var(--rad);
+    padding: 8px 10px; color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .field-row textarea:focus { border-color: var(--border2); }
+
+  /* Configurações adicionais — select */
+  .config-row { display: flex; flex-direction: column; gap: 6px; }
+  .config-row label { font-size: 13px; color: var(--text2); }
+  .config-row select {
+    font-size: 13px; padding: 8px 10px; width: 100%;
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: var(--rad); color: var(--text); outline: none;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .config-row select:focus { border-color: var(--border2); }
+  .field-hint { font-size: 11px; color: var(--text3); line-height: 1.5; margin-top: 2px; }
+
+  /* Paleta customizada */
+  .custom-palette-section { margin-top: 1rem; display: none; }
+  .custom-palette-section.visible { display: block; }
+
+  .color-add-row { display: flex; gap: 8px; align-items: center; }
+  .color-add-row input[type=color] {
+    width: 38px; height: 34px; padding: 2px 3px; flex-shrink: 0;
+    border: 0.5px solid var(--border2); border-radius: var(--rad);
+    background: var(--bg2); cursor: pointer;
+  }
+  .color-add-row input[type=text] {
+    flex: 1; font-size: 13px; font-family: var(--mono);
+    padding: 7px 10px; background: var(--bg2);
+    border: 0.5px solid var(--border); border-radius: var(--rad);
+    color: var(--text); outline: none; transition: border-color 0.15s;
+  }
+  .color-add-row input[type=text]:focus { border-color: var(--border2); }
+  .color-add-btn {
+    font-size: 13px; padding: 7px 13px; flex-shrink: 0;
+    background: var(--bg2); border: 0.5px solid var(--border2);
+    border-radius: var(--rad); cursor: pointer; color: var(--text2);
+    transition: color 0.1s; white-space: nowrap;
+  }
+  .color-add-btn:hover { color: var(--text); }
+
+  .custom-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .custom-chip {
+    display: flex; align-items: center; gap: 5px;
+    padding: 3px 8px 3px 5px; border: 0.5px solid var(--border2);
+    border-radius: 99px; background: var(--bg2);
+    font-size: 12px; font-family: var(--mono); color: var(--text2);
+  }
+  .custom-chip-swatch {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 0.5px solid var(--border2); flex-shrink: 0;
+  }
+  .custom-chip-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--text3); font-size: 11px; line-height: 1;
+    padding: 0 0 0 2px; display: flex; align-items: center;
+    transition: color 0.1s;
+  }
+  .custom-chip-remove:hover { color: var(--danger-text); }
+
+  /* Botão analisar */
+  .analyze-btn {
+    width: 100%; padding: 11px; font-size: 14px; font-weight: 500; cursor: pointer;
+    background: var(--accent); color: #fff; border: none; border-radius: var(--rad);
+    transition: opacity 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    margin-top: 0.5rem;
+  }
+  .analyze-btn:hover { opacity: 0.88; }
+  .analyze-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .status {
+    font-size: 13px; color: var(--text2); margin-top: 10px; min-height: 20px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid var(--border2);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin 0.7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error-msg {
+    font-size: 13px; color: var(--danger-text); padding: 8px 12px;
+    background: var(--danger-bg); border-radius: var(--rad);
+    display: none; margin-top: 8px;
+  }
+
+  /* Resultado */
+  .result-card {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--rad-lg); overflow: hidden; margin-top: 1.5rem;
+  }
+  .result-header {
+    padding: 10px 14px; background: var(--bg2);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .result-header span {
+    font-size: 12px; font-weight: 500; color: var(--text2);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .copy-btn {
+    font-size: 12px; color: var(--text2); background: none;
+    border: 0.5px solid var(--border2); border-radius: var(--rad);
+    padding: 3px 10px; cursor: pointer;
+    display: flex; align-items: center; gap: 4px; transition: color 0.1s;
+  }
+  .copy-btn:hover { color: var(--text); }
+
+  .result-body { padding: 14px; }
+  .ds-block { margin-bottom: 1.25rem; }
+  .ds-block:last-child { margin-bottom: 0; }
+  .ds-block-title {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.07em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 6px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .ds-value { font-size: 13px; line-height: 1.6; color: var(--text); }
+
+  .ds-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip {
+    font-size: 12px; padding: 3px 10px; border-radius: 99px;
+    border: 0.5px solid var(--border2); color: var(--text2); background: var(--bg2);
+  }
+  .chip.accent { background: var(--accent-bg); color: var(--accent-text); border-color: transparent; }
+
+  .palette-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .swatch-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .swatch { width: 36px; height: 36px; border-radius: var(--rad); border: 0.5px solid var(--border); }
+  .swatch-hex { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+
+  .vis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px; }
+  .vis-cell { background: var(--bg2); border-radius: var(--rad); padding: 8px 10px; border: 0.5px solid var(--border); }
+  .vis-cell-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text3); margin-bottom: 3px; }
+  .vis-cell-val { font-size: 12px; color: var(--text); line-height: 1.5; }
+
+  .prompt-box {
+    background: var(--bg2); border-radius: var(--rad);
+    padding: 10px 12px; font-size: 12px; font-family: var(--mono);
+    color: var(--text); line-height: 1.65; word-break: break-word;
+    border: 0.5px solid var(--border);
+  }
+
+  .divider { border: none; border-top: 0.5px solid var(--border); margin: 1rem 0; }
+
+  .icon-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text3); font-size: 18px; line-height: 1;
+    padding: 2px; display: flex; align-items: center; transition: color 0.1s;
+  }
+  .icon-btn:hover { color: var(--text2); }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="app-header">
+    <h1><i class="ti ti-eye-search"></i> Extrator de Estilo — IsdetArt</h1>
+    <p>Analisa imagens de referência e devolve um design system pronto para prompting no OpenArt AI.</p>
+  </header>
+
+  <!-- API Key -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-key" style="font-size:13px"></i> API Key</div>
+    <div class="api-key-row">
+      <i class="ti ti-lock" aria-hidden="true"></i>
+      <input type="password" id="api-key" placeholder="sk-ant-…  (Anthropic API key)" autocomplete="off" spellcheck="false">
+      <button class="icon-btn" id="toggle-key" aria-label="Mostrar/ocultar chave">
+        <i class="ti ti-eye" id="eye-icon"></i>
+      </button>
+    </div>
+    <p class="key-note">
+      <i class="ti ti-shield-lock" style="font-size:12px"></i>
+      Usada só nesta sessão. Some ao fechar a aba. Obtenha em console.anthropic.com → API Keys.
+    </p>
+  </div>
+
+  <!-- Imagens -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-photo" style="font-size:13px"></i> Imagens de referência</div>
+    <div class="drop-zone" id="drop-zone">
+      <input type="file" id="file-input" accept="image/*" multiple>
+      <div class="drop-icon"><i class="ti ti-photo-plus"></i></div>
+      <div class="drop-label">Solte imagens aqui ou clique para escolher</div>
+      <div class="drop-sub">JPG, PNG, WEBP — até 6 imagens</div>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+  </div>
+
+  <!-- Contexto -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-adjustments" style="font-size:13px"></i> Contexto (opcional)</div>
+    <div class="field-row">
+      <label>Intenção / público-alvo</label>
+      <textarea id="ctx-intent" placeholder="ex: estampas para camisetas adultas, estilo urbano, público jovem..."></textarea>
+    </div>
+    <div class="field-row">
+      <label>Técnica de destino</label>
+      <textarea id="ctx-tech" style="min-height:40px" placeholder="ex: DTF em algodão, serigrafia 1 cor, sublimação em poliéster..."></textarea>
+    </div>
+  </div>
+
+  <!-- Configurações adicionais -->
+  <div class="card">
+    <div class="section-label"><i class="ti ti-settings" style="font-size:13px"></i> Configurações adicionais</div>
+
+    <div class="config-row">
+      <label for="color-scheme-select">Esquema de cores</label>
+      <select id="color-scheme-select">
+        <option value="inherit">Herdar paleta das referências</option>
+        <option value="no-inherit">Não herdar paleta de cores</option>
+        <option value="custom">Paleta de cores customizada</option>
+      </select>
+      <p class="field-hint" id="color-scheme-hint">As cores dominantes das imagens serão extraídas e incluídas no output.</p>
+    </div>
+
+    <div class="custom-palette-section" id="custom-palette-section">
+      <div class="color-add-row">
+        <input type="color" id="custom-color-picker" value="#000000" title="Escolher cor">
+        <input type="text" id="custom-hex-input" placeholder="#RRGGBB" maxlength="7" spellcheck="false">
+        <button class="color-add-btn" id="custom-add-btn" type="button">
+          <i class="ti ti-plus" style="font-size:13px;vertical-align:-1px"></i> Adicionar
+        </button>
+      </div>
+      <div class="custom-chips" id="custom-chips"></div>
+    </div>
+  </div>
+
+  <button class="analyze-btn" id="analyze-btn" disabled>
+    <i class="ti ti-sparkles" style="font-size:15px"></i> Analisar estilo
+  </button>
+  <div class="error-msg" id="error-msg"></div>
+  <div class="status" id="status"></div>
+  <div id="result-area"></div>
+
+</div>
+<script>
+const MAX = 6;
+let images = [];
+let customColors = [];
+
+const $ = id => document.getElementById(id);
+const dropZone = $('drop-zone'), fileInput = $('file-input'), thumbsEl = $('thumbs');
+const analyzeBtn = $('analyze-btn'), statusEl = $('status');
+const resultArea = $('result-area'), errorMsg = $('error-msg');
+const apiKeyInput = $('api-key'), toggleKey = $('toggle-key'), eyeIcon = $('eye-icon');
+const colorSchemeSelect = $('color-scheme-select');
+const customPaletteSection = $('custom-palette-section');
+const colorPicker = $('custom-color-picker');
+const hexInput = $('custom-hex-input');
+const customAddBtn = $('custom-add-btn');
+const customChipsEl = $('custom-chips');
+const colorSchemeHint = $('color-scheme-hint');
+
+const COLOR_HINTS = {
+  'inherit':    'As cores dominantes das imagens serão extraídas e incluídas no output.',
+  'no-inherit': 'Nenhuma cor específica será mencionada no output — apenas qualidades como "cores vivas", "alto contraste", etc.',
+  'custom':     'Defina a paleta que o output deve usar. As cores das referências serão ignoradas.'
+};
+
+// --- API Key toggle ---
+toggleKey.onclick = () => {
+  const show = apiKeyInput.type === 'password';
+  apiKeyInput.type = show ? 'text' : 'password';
+  eyeIcon.className = show ? 'ti ti-eye-off' : 'ti ti-eye';
+};
+
+// --- Botão analisar ---
+function updateBtn() {
+  analyzeBtn.disabled = images.length === 0 || !apiKeyInput.value.trim();
+}
+apiKeyInput.addEventListener('input', updateBtn);
+
+// --- Status / erro ---
+function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+function hideError() { errorMsg.style.display = 'none'; }
+function setStatus(msg, spin = false) {
+  statusEl.innerHTML = msg
+    ? (spin ? '<div class="spinner"></div>' : '') + `<span>${msg}</span>`
+    : '';
+}
+
+// --- Thumbnails ---
+function renderThumbs() {
+  thumbsEl.innerHTML = '';
+  images.forEach((img, i) => {
+    const w = document.createElement('div'); w.className = 'thumb-wrap';
+    const im = document.createElement('img'); im.src = img.url; im.alt = `Ref ${i + 1}`;
+    const rm = document.createElement('button'); rm.className = 'thumb-remove';
+    rm.innerHTML = '<i class="ti ti-x"></i>';
+    rm.setAttribute('aria-label', `Remover imagem ${i + 1}`);
+    rm.onclick = e => { e.stopPropagation(); images.splice(i, 1); renderThumbs(); updateBtn(); };
+    w.appendChild(im); w.appendChild(rm); thumbsEl.appendChild(w);
+  });
+}
+
+async function addFiles(files) {
+  hideError();
+  const slots = MAX - images.length;
+  if (!slots) { showError(`Limite de ${MAX} imagens atingido.`); return; }
+  for (const f of Array.from(files).slice(0, slots)) {
+    if (!f.type.startsWith('image/')) continue;
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result.split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+    images.push({ url: URL.createObjectURL(f), b64, mime: f.type });
+  }
+  renderThumbs(); updateBtn();
+}
+
+fileInput.addEventListener('change', e => addFiles(e.target.files));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('drag-over'); addFiles(e.dataTransfer.files);
+});
+
+// --- Esquema de cores ---
+colorSchemeSelect.addEventListener('change', () => {
+  const v = colorSchemeSelect.value;
+  customPaletteSection.classList.toggle('visible', v === 'custom');
+  colorSchemeHint.textContent = COLOR_HINTS[v] || '';
+});
+
+// --- Paleta customizada ---
+colorPicker.addEventListener('input', () => {
+  hexInput.value = colorPicker.value.toUpperCase();
+});
+
+hexInput.addEventListener('input', () => {
+  let v = hexInput.value.trim();
+  if (!v.startsWith('#')) v = '#' + v;
+  if (/^#[0-9A-Fa-f]{6}$/.test(v)) colorPicker.value = v.toLowerCase();
+});
+
+hexInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); addCustomColor(); }
+});
+
+customAddBtn.addEventListener('click', addCustomColor);
+
+function addCustomColor() {
+  let hex = hexInput.value.trim();
+  if (!hex.startsWith('#')) hex = '#' + hex;
+  if (!/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+    showError('Cor inválida. Use formato hex: #RRGGBB');
+    return;
+  }
+  hideError();
+  const upper = hex.toUpperCase();
+  if (customColors.includes(upper)) return;
+  customColors.push(upper);
+  renderCustomChips();
+  hexInput.value = '';
+  colorPicker.value = '#000000';
+}
+
+function renderCustomChips() {
+  customChipsEl.innerHTML = '';
+  customColors.forEach((hex, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'custom-chip';
+    chip.innerHTML = `
+      <div class="custom-chip-swatch" style="background:${hex}"></div>
+      <span>${hex}</span>
+      <button class="custom-chip-remove" aria-label="Remover ${hex}">
+        <i class="ti ti-x"></i>
+      </button>`;
+    chip.querySelector('.custom-chip-remove').onclick = () => {
+      customColors.splice(i, 1);
+      renderCustomChips();
+    };
+    customChipsEl.appendChild(chip);
+  });
+}
+
+// --- Prompt ---
+function buildPrompt() {
+  const intent = $('ctx-intent').value.trim();
+  const tech = $('ctx-tech').value.trim();
+  const colorScheme = colorSchemeSelect.value;
+  let ctx = '';
+  if (intent) ctx += `\nIntenção / público: ${intent}`;
+  if (tech) ctx += `\nTécnica de destino: ${tech}`;
+
+  let colorInstruction;
+  if (colorScheme === 'no-inherit') {
+    colorInstruction = `REGRA OBRIGATÓRIA — CORES: O campo "paleta" deve ser [] (array vazio). Em NENHUM outro campo (resumo, paleta_tonal, elementos_visuais, sujeitos, mood, estilo_tecnico, evitar, prompt_base, prompt_negativo) mencione cores específicas — nem nomes (azul, vermelho, ciano…) nem valores hex. Mencione apenas qualidades cromáticas abstratas: "cores vivas", "alto contraste", "tons apagados", "baixa saturação", "transparência", etc.`;
+  } else if (colorScheme === 'custom') {
+    const list = customColors.join(', ');
+    colorInstruction = `REGRA OBRIGATÓRIA — CORES: Ignore completamente as cores presentes nas imagens de referência. Use EXCLUSIVAMENTE esta paleta fornecida pelo usuário: ${list}. Preencha o campo "paleta" apenas com essas cores, distribuindo papéis e usos com base no conteúdo das imagens. Mencione essas cores no prompt_base.`;
+  } else {
+    colorInstruction = `Paleta: inclua 4-8 cores dominantes extraídas das imagens, com hex aproximado.`;
+  }
+
+  return `Você é um diretor de arte especialista em engenharia reversa de estilo visual para guiar geração de arte por IA.
+
+Analise as imagens de referência e produza um design system enxuto no formato JSON EXATO abaixo. Retorne APENAS o JSON, sem texto antes ou depois, sem blocos de código markdown.
+
+{
+  "nome_estilo": "nome curto e memorável (2-5 palavras)",
+  "resumo": "2-3 frases descrevendo o estilo objetivamente",
+  "paleta": [{ "nome": "papel da cor", "hex": "#XXXXXX", "uso": "onde aparece" }],
+  "elementos_visuais": {
+    "linha": "tratamento de linha/contorno",
+    "forma": "como as formas são construídas",
+    "textura": "acabamento, granulação, noise, liso, etc.",
+    "composicao": "organização do espaço, simetria, densidade"
+  },
+  "paleta_tonal": "descrição do contraste e luminosidade geral",
+  "sujeitos": "o que aparece — personagens, objetos, cenário",
+  "mood": ["até 5 adjetivos"],
+  "estilo_tecnico": ["até 6 termos técnicos de arte/design"],
+  "evitar": ["3-5 elementos que QUEBRARIAM este estilo"],
+  "prompt_base": "fragmento de prompt em inglês pronto para o OpenArt AI, 60-100 palavras",
+  "prompt_negativo": "negative prompt em inglês, 20-40 palavras"
+}
+
+${colorInstruction}${ctx}`;
+}
+
+// --- Renderização do resultado ---
+function parsePalette(p, colorScheme) {
+  if (!Array.isArray(p) || p.length === 0) {
+    if (colorScheme === 'no-inherit') {
+      return '<span style="font-size:12px;color:var(--text3)">Paleta não herdada — cores livres para inferência pelo sujeito.</span>';
+    }
+    return '';
+  }
+  return '<div class="palette-row">' + p.map(c =>
+    `<div class="swatch-wrap" title="${c.nome || ''}: ${c.uso || ''}">
+      <div class="swatch" style="background:${c.hex || '#888'}"></div>
+      <div class="swatch-hex">${(c.hex || '').toUpperCase()}</div>
+    </div>`
+  ).join('') + '</div>';
+}
+
+function chips(arr, acc = false) {
+  if (!Array.isArray(arr)) return '';
+  return '<div class="ds-chips">' +
+    arr.map(t => `<span class="chip${acc ? ' accent' : ''}">${t}</span>`).join('') +
+    '</div>';
+}
+
+function copyText(txt, btnId) {
+  navigator.clipboard.writeText(txt).then(() => {
+    const b = $(btnId); if (!b) return;
+    const o = b.innerHTML;
+    b.innerHTML = '<i class="ti ti-check" style="font-size:12px"></i> Copiado';
+    setTimeout(() => { b.innerHTML = o; }, 1800);
+  });
+}
+
+function renderResult(ds) {
+  const colorScheme = colorSchemeSelect.value;
+  const full = JSON.stringify(ds, null, 2);
+  resultArea.innerHTML = `
+  <div class="result-card">
+    <div class="result-header">
+      <span><i class="ti ti-brush" style="font-size:13px"></i>${ds.nome_estilo || 'Design system'}</span>
+      <button class="copy-btn" id="cp-full"><i class="ti ti-copy" style="font-size:12px"></i> Copiar JSON</button>
+    </div>
+    <div class="result-body">
+
+      <div class="ds-block">
+        <div class="ds-block-title">Resumo</div>
+        <div class="ds-value">${ds.resumo || ''}</div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ds-block">
+        <div class="ds-block-title">Paleta de cores</div>
+        ${parsePalette(ds.paleta, colorScheme)}
+      </div>
+
+      <div class="ds-block">
+        <div class="ds-block-title">Tom geral</div>
+        <div class="ds-value">${ds.paleta_tonal || ''}</div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="ds-block">
+        <div class="ds-block-title">Elementos visuais</div>
+        ${ds.elementos_visuais ? `<div class="vis-grid">` +
+          ['linha', 'forma', 'textura', 'composicao'].map(k => ds.elementos_visuais[k] ?
+            `<div class="vis-cell">
+              <div class="vis-cell-title">${k}</div>
+              <div class="vis-cell-val">${ds.elementos_visuais[k]}</div>
+            </div>` : ''
+          ).join('') + `</div>` : ''}
+      </div>
+
+      <hr class="divider">
+
+      <div class="ds-block">
+        <div class="ds-block-title">Sujeitos</div>
+        <div class="ds-value">${ds.sujeitos || ''}</div>
+      </div>
+      <div class="ds-block">
+        <div class="ds-block-title">Mood</div>
+        ${chips(ds.mood, true)}
+      </div>
+      <div class="ds-block">
+        <div class="ds-block-title">Termos técnicos</div>
+        ${chips(ds.estilo_tecnico)}
+      </div>
+      <div class="ds-block">
+        <div class="ds-block-title">Evitar</div>
+        ${chips(ds.evitar)}
+      </div>
+
+      <hr class="divider">
+
+      <div class="ds-block">
+        <div class="ds-block-title">
+          <span>Prompt base — OpenArt AI</span>
+          <button class="copy-btn" id="cp-prompt"><i class="ti ti-copy" style="font-size:12px"></i> Copiar</button>
+        </div>
+        <div class="prompt-box">${ds.prompt_base || ''}</div>
+      </div>
+
+      <div class="ds-block">
+        <div class="ds-block-title">
+          <span>Negative prompt</span>
+          <button class="copy-btn" id="cp-neg"><i class="ti ti-copy" style="font-size:12px"></i> Copiar</button>
+        </div>
+        <div class="prompt-box">${ds.prompt_negativo || ''}</div>
+      </div>
+
+    </div>
+  </div>`;
+
+  $('cp-prompt').onclick = () => copyText(ds.prompt_base || '', 'cp-prompt');
+  $('cp-neg').onclick    = () => copyText(ds.prompt_negativo || '', 'cp-neg');
+  $('cp-full').onclick   = () => copyText(full, 'cp-full');
+
+  resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// --- Analisar ---
+analyzeBtn.addEventListener('click', async () => {
+  const key = apiKeyInput.value.trim();
+  if (!key) { showError('Insira a API key antes de continuar.'); return; }
+
+  if (colorSchemeSelect.value === 'custom' && customColors.length === 0) {
+    showError('Adicione ao menos uma cor à paleta customizada.'); return;
+  }
+
+  hideError(); resultArea.innerHTML = '';
+  analyzeBtn.disabled = true;
+  setStatus('Analisando referências…', true);
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2500,
+        messages: [{
+          role: 'user',
+          content: [
+            ...images.map(img => ({
+              type: 'image',
+              source: { type: 'base64', media_type: img.mime, data: img.b64 }
+            })),
+            { type: 'text', text: buildPrompt() }
+          ]
+        }]
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error?.message || `Erro ${res.status}`);
+    if (data.stop_reason === 'max_tokens') throw new Error('Resposta cortada pelo limite de tokens. Tente novamente.');
+
+    const raw = (data.content || []).map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    let ds;
+    try { ds = JSON.parse(clean); }
+    catch (e) { throw new Error('Resposta fora do formato esperado. Tente novamente.'); }
+
+    setStatus('');
+    renderResult(ds);
+  } catch (e) {
+    setStatus('');
+    showError(e.message || 'Erro desconhecido.');
+  } finally {
+    updateBtn();
+  }
+});
+</script>
+</body>
+</html>
