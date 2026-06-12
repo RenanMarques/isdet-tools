@@ -333,10 +333,24 @@ function clearFieldError(fieldId) {
   el.closest(".field-row")?.querySelector(`.field-error[data-for="${fieldId}"]`)?.remove();
 }
 
+async function migratePurchaseIds() {
+  const toMigrate = purchases.filter(p => !p.supplyId && p.supplyName);
+  if (!toMigrate.length) return;
+  for (const p of toMigrate) {
+    const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
+    if (supply) {
+      p.supplyId = supply.id;
+      delete p.supplyName;
+      await purchasesCol.save(p);
+    }
+  }
+}
+
 async function load() {
   supplies  = await suppliesCol.findAll();
   sessions  = await sessionsCol.findAll();
   purchases = await purchasesCol.findAll();
+  await migratePurchaseIds();
   renderAll();
 }
 
@@ -653,11 +667,13 @@ async function saveSupply() {
   const raw      = parseFloat(document.getElementById("ins-stock").value);
 
   const existing = findExistingByName(name);
+  let supplyId;
   if (existing) {
     existing.stock    = isNaN(raw) ? existing.stock + quantity : raw;
     existing.quantity += quantity;
     existing.price    += price;
     await suppliesCol.save(existing);
+    supplyId = existing.id;
   } else {
     const minStock = parseFloat(document.getElementById("ins-min-stock").value) || 0;
     const record = {
@@ -672,11 +688,12 @@ async function saveSupply() {
     };
     supplies.push(record);
     await suppliesCol.save(record);
+    supplyId = record.id;
   }
 
   const purchase = {
     id: Date.now() + 1,
-    supplyName: name,
+    supplyId,
     unit,
     quantity,
     price,
@@ -699,8 +716,8 @@ async function removeSupply(id) {
   supplies = supplies.filter(i => i.id !== id);
   await suppliesCol.remove(id);
   if (supply) {
-    const related = purchases.filter(p => p.supplyName.toLowerCase() === supply.name.toLowerCase());
-    purchases = purchases.filter(p => p.supplyName.toLowerCase() !== supply.name.toLowerCase());
+    const related = purchases.filter(p => p.supplyId === supply.id);
+    purchases = purchases.filter(p => p.supplyId !== supply.id);
     for (const p of related) await purchasesCol.remove(p.id);
   }
   renderAll(); renderSessionSupplies();
@@ -720,7 +737,7 @@ function openEditSupplyModal(supplyId) {
         <div style="font-size:14px;font-weight:600">Editar insumo</div>
         <button onclick="document.getElementById('__isdet_edit_supply__').remove()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:20px;line-height:1" aria-label="Fechar">×</button>
       </div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">${supply.name}</div>
+      <div class="field-row" style="margin-bottom:10px"><label>Nome</label><input id="esp-name" type="text" value="${supply.name.replace(/"/g,'&quot;')}" style="font-size:13px;padding:7px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);width:100%"></div>
       <div class="field-row" style="margin-bottom:4px">
         <label>Técnica</label>
         <select id="esp-technique" style="font-size:13px;padding:7px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);width:100%">
@@ -744,6 +761,8 @@ function openEditSupplyModal(supplyId) {
 async function saveEditedSupply(supplyId) {
   const supply = supplies.find(x => x.id === supplyId);
   if (!supply) return;
+  const newName = document.getElementById("esp-name").value.trim();
+  if (newName) supply.name = newName;
   supply.technique = document.getElementById("esp-technique").value;
   supply.minStock  = parseFloat(document.getElementById("esp-min-stock").value) || 0;
   supply.notes     = document.getElementById("esp-notes").value.trim();
@@ -766,7 +785,7 @@ function renderSuppliesTable() {
       ? '<span class="badge badge-danger">Baixo</span>'
       : '<span class="badge badge-green">OK</span>';
     const history = purchases
-      .filter(p => p.supplyName.toLowerCase() === i.name.toLowerCase())
+      .filter(p => p.supplyId === i.id)
       .sort((a, b) => a.purchasedAt.localeCompare(b.purchasedAt));
     const expandBtn = history.length
       ? `<button class="btn small" onclick="togglePurchaseHistory(${i.id})" id="btn-expand-${i.id}" style="padding:3px 7px"><i class="ti ti-chevron-right" id="icon-expand-${i.id}" aria-hidden="true"></i></button>`
@@ -804,7 +823,7 @@ async function deletePurchase(purchaseId) {
   if (!confirm("Remover esta compra?")) return;
   const p = purchases.find(x => x.id === purchaseId);
   if (!p) return;
-  const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
+  const supply = supplies.find(s => s.id === p.supplyId);
   let quantityZeroed = false;
   if (supply) {
     supply.quantity -= p.quantity;
@@ -863,7 +882,7 @@ async function saveEditedPurchase(purchaseId) {
   if (!price || price <= 0) { showFieldError("epp-price", "Informe um valor pago maior que zero."); valid = false; }
   if (!valid) return;
   const notes   = document.getElementById("epp-notes").value.trim();
-  const supply = supplies.find(s => s.name.toLowerCase() === p.supplyName.toLowerCase());
+  const supply = supplies.find(s => s.id === p.supplyId);
   if (supply) {
     supply.quantity = supply.quantity - p.quantity + qty;
     supply.price    = supply.price    - p.price    + price;
