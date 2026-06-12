@@ -793,7 +793,7 @@ function renderSuppliesTable() {
     const historyRows = history.map(p => `<tr style="background:var(--bg2)">
       <td></td>
       <td colspan="2" style="color:var(--text3);font-size:12px;padding-left:1.5rem">${p.purchasedAt}${p.notes ? `<br><span style="font-size:11px;font-style:italic">${p.notes}</span>` : ""}</td>
-      <td style="font-size:12px;font-variant-numeric:tabular-nums">${fmt(p.price / p.quantity)}/${formatUnit(p.unit)}</td>
+      <td style="font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap">${fmt(p.price / p.quantity)} / ${formatUnit(p.unit)}</td>
       <td style="font-size:12px">${fmtN(p.quantity, 2)} ${formatUnit(p.unit)}</td>
       <td style="font-size:12px;color:var(--text3)">${fmt(p.price)}</td>
       <td style="text-align:right;white-space:nowrap">
@@ -805,7 +805,7 @@ function renderSuppliesTable() {
       <td>${expandBtn}</td>
       <td><strong>${i.name}</strong>${i.notes ? `<br><span style="color:var(--text3);font-size:11px">${i.notes}</span>` : ""}</td>
       <td><span class="badge badge-gray">${i.technique}</span></td>
-      <td style="font-variant-numeric:tabular-nums">${fmt(cu)}/${formatUnit(i.unit)}</td>
+      <td style="font-variant-numeric:tabular-nums;white-space:nowrap">${fmt(cu)} / ${formatUnit(i.unit)}</td>
       <td>${fmtN(i.stock, 1)} ${formatUnit(i.unit)}</td>
       <td>${st}</td>
       <td style="white-space:nowrap">
