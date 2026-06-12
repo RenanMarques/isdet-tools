@@ -434,6 +434,7 @@ function showTab(id, btn) {
 
 async function saveGeneration(ds) {
   const record = {
+    id: crypto.randomUUID(),
     characterName: ds.personagem || charInput.value.trim(),
     work: ds.obra || '',
     poseCount: Array.isArray(ds.poses) ? ds.poses.length : 0,

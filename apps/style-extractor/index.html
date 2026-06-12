@@ -434,6 +434,7 @@ function showTab(id, btn) {
 
 async function saveAnalysis(ds) {
   const record = {
+    id: crypto.randomUUID(),
     styleName: ds.nome_estilo || 'Sem nome',
     imageCount: images.length,
     colorScheme: colorSchemeSelect.value,
