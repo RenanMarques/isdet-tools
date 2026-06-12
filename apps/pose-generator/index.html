@@ -451,6 +451,8 @@ async function saveGeneration(ds) {
   }
 }
 
+let historyRecords = [];
+
 async function loadHistory() {
   let records;
   try {
@@ -460,30 +462,31 @@ async function loadHistory() {
     return;
   }
   records.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  historyRecords = records;
   const el = document.getElementById('history-list');
   if (!records.length) {
     el.innerHTML = '<div class="history-empty">Nenhuma geração salva ainda.</div>';
     return;
   }
-  el.innerHTML = records.map(r => {
+  el.innerHTML = records.map((r, i) => {
     const date = r.savedAt ? new Date(r.savedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     const posesLabel = r.poseCount === 1 ? '1 pose' : `${r.poseCount || 0} poses`;
+    const canDelete = r.id != null;
     return `<div class="history-card">
       <div class="history-card-info">
         <div class="history-card-title">${esc(r.characterName || '—')}</div>
         <div class="history-card-sub">${r.work ? esc(r.work) + ' · ' : ''}${posesLabel} · ${date}</div>
       </div>
       <div class="history-card-actions">
-        <button class="btn-secondary" onclick="viewHistoryEntry('${r.id}')"><i class="ti ti-eye"></i> Ver resultado</button>
-        <button class="btn-danger" onclick="deleteHistoryEntry('${r.id}')"><i class="ti ti-trash"></i> Excluir</button>
+        <button class="btn-secondary" onclick="viewHistoryEntry(${i})"><i class="ti ti-eye"></i> Ver resultado</button>
+        ${canDelete ? `<button class="btn-danger" onclick="deleteHistoryEntry('${r.id}')"><i class="ti ti-trash"></i> Excluir</button>` : ''}
       </div>
     </div>`;
   }).join('');
 }
 
-async function viewHistoryEntry(id) {
-  let record;
-  try { record = await generationsCol.find(id); } catch (e) { alert('Erro ao carregar geração.'); return; }
+function viewHistoryEntry(i) {
+  const record = historyRecords[i];
   if (!record?.data) return;
   showTab('generate', document.querySelector('.tab[data-tab="generate"]'));
   renderResult(record.data);

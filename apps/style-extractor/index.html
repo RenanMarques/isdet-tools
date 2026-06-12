@@ -451,6 +451,8 @@ async function saveAnalysis(ds) {
   }
 }
 
+let historyRecords = [];
+
 async function loadHistory() {
   let records;
   try {
@@ -460,30 +462,31 @@ async function loadHistory() {
     return;
   }
   records.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  historyRecords = records;
   const el = document.getElementById('history-list');
   if (!records.length) {
     el.innerHTML = '<div class="history-empty">Nenhuma análise salva ainda.</div>';
     return;
   }
-  el.innerHTML = records.map(r => {
+  el.innerHTML = records.map((r, i) => {
     const date = r.savedAt ? new Date(r.savedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
     const moodText = Array.isArray(r.mood) && r.mood.length ? r.mood.map(esc).join(', ') : '';
+    const canDelete = r.id != null;
     return `<div class="history-card">
       <div class="history-card-info">
         <div class="history-card-title">${esc(r.styleName || '—')}</div>
         <div class="history-card-sub">${moodText ? moodText + ' · ' : ''}${date}</div>
       </div>
       <div class="history-card-actions">
-        <button class="btn-secondary" onclick="viewHistoryEntry('${r.id}')"><i class="ti ti-eye"></i> Ver resultado</button>
-        <button class="btn-danger" onclick="deleteHistoryEntry('${r.id}')"><i class="ti ti-trash"></i> Excluir</button>
+        <button class="btn-secondary" onclick="viewHistoryEntry(${i})"><i class="ti ti-eye"></i> Ver resultado</button>
+        ${canDelete ? `<button class="btn-danger" onclick="deleteHistoryEntry('${r.id}')"><i class="ti ti-trash"></i> Excluir</button>` : ''}
       </div>
     </div>`;
   }).join('');
 }
 
-async function viewHistoryEntry(id) {
-  let record;
-  try { record = await analysesCol.find(id); } catch (e) { alert('Erro ao carregar análise.'); return; }
+function viewHistoryEntry(i) {
+  const record = historyRecords[i];
   if (!record?.data) return;
   if (record.colorScheme) colorSchemeSelect.value = record.colorScheme;
   showTab('analyze', document.querySelector('.tab[data-tab="analyze"]'));
