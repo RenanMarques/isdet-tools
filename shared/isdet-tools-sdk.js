@@ -280,8 +280,11 @@
       if (!queue.length) {
         const deadLetters = await DeadLetter.load().catch(() => []);
         const actionable = deadLetters.filter((e) => e.type !== "max_retries");
+        const stalled    = deadLetters.filter((e) => e.type === "max_retries");
         if (actionable.length) {
           this._emit("dead_letter", { count: actionable.length, lastSync: this._lastSync });
+        } else if (stalled.length) {
+          this._emit("unsynced", { count: stalled.length });
         } else {
           this._emit("synced", { lastSync: this._lastSync });
         }
@@ -377,6 +380,7 @@
 
       const deadLetters = await DeadLetter.load().catch(() => []);
       const actionable = deadLetters.filter((e) => e.type !== "max_retries");
+      const stalled    = deadLetters.filter((e) => e.type === "max_retries");
       if (authExpired) {
         try { await Queue.save(failed); } catch { /* quota: retry state lost */ }
         this._emit("auth_expired");
@@ -387,6 +391,8 @@
         this._lastSync = new Date();
         if (actionable.length) {
           this._emit("dead_letter", { count: actionable.length, lastSync: this._lastSync });
+        } else if (stalled.length) {
+          this._emit("unsynced", { count: stalled.length });
         } else {
           this._emit("synced", { lastSync: this._lastSync });
         }
