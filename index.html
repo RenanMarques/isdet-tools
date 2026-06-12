@@ -49,5 +49,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- Add new tools here following the same pattern -->
   </div>
 </div>
+<script>
+fetch('/version').then(r=>r.json()).then(({sha})=>{
+  if(!sha||sha==='dev')return;
+  const a=document.createElement('a');
+  a.href='https://github.com/RenanMarques/isdet-tools/commit/'+sha;
+  a.textContent=sha.slice(0,7);
+  a.target='_blank';a.rel='noopener noreferrer';
+  a.style.cssText='position:fixed;bottom:10px;right:14px;font-size:11px;font-family:monospace;opacity:.3;color:inherit;text-decoration:none';
+  a.onmouseenter=()=>a.style.opacity='.7';
+  a.onmouseleave=()=>a.style.opacity='.3';
+  document.body.appendChild(a);
+});
+</script>
 </body>
 </html>
