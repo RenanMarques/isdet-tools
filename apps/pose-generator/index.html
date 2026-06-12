@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IsdetArt — Gerador de Poses</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="/shared/isdet-tools-sdk.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -56,13 +57,35 @@
 
   .container { max-width: 720px; margin: 0 auto; }
 
-  .app-header { margin-bottom: 2rem; }
+  .app-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 2rem; gap: 1rem; flex-wrap: wrap;
+  }
+  .header-meta { flex: 1; min-width: 0; }
+  #sync-indicator { padding: 4px 10px; background: var(--bg); border: 0.5px solid var(--border); border-radius: 99px; flex-shrink: 0; margin-top: 4px; }
   .app-header h1 {
     font-size: 20px; font-weight: 500; letter-spacing: -0.01em;
     display: flex; align-items: center; gap: 8px;
   }
   .app-header h1 i { color: var(--accent); font-size: 20px; }
   .app-header p { font-size: 13px; color: var(--text2); margin-top: 5px; line-height: 1.5; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--border); margin-bottom: 1.25rem; }
+  .tab { padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: none; color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -0.5px; transition: color .15s, border-color .15s; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .history-card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--rad-lg); padding: 1rem 1.1rem; margin-bottom: 0.75rem; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .history-card-info { flex: 1; min-width: 0; }
+  .history-card-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .history-card-sub { font-size: 12px; color: var(--text3); margin-top: 3px; }
+  .history-card-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
+  .btn-secondary { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: var(--rad); cursor: pointer; border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text); transition: background .15s; display: inline-flex; align-items: center; gap: 5px; }
+  .btn-secondary:hover { background: var(--bg3); }
+  .btn-danger { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: var(--rad); cursor: pointer; border: none; background: var(--danger-bg); color: var(--danger-text); display: inline-flex; align-items: center; gap: 5px; }
+  .history-empty { text-align: center; padding: 2rem; color: var(--text3); font-size: 13px; }
 
   .card {
     background: var(--bg); border: 0.5px solid var(--border);
@@ -295,9 +318,23 @@
 <div class="container">
 
   <header class="app-header">
-    <h1><i class="ti ti-body-scan"></i> Gerador de Poses — IsdetArt</h1>
-    <p>Você nomeia um personagem; a ferramenta lê personalidade e lore e devolve poses que combinam com ele — com o porquê de cada uma e um trecho de prompt pronto pro OpenArt.</p>
+    <div class="header-meta">
+      <h1><i class="ti ti-body-scan"></i> Gerador de Poses — IsdetArt</h1>
+      <p>Você nomeia um personagem; a ferramenta lê personalidade e lore e devolve poses que combinam com ele — com o porquê de cada uma e um trecho de prompt pronto pro OpenArt.</p>
+    </div>
+    <div id="sync-indicator"></div>
   </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="generate" onclick="showTab('generate',this)">
+      <i class="ti ti-sparkles" aria-hidden="true"></i> Gerar
+    </button>
+    <button class="tab" data-tab="history" onclick="showTab('history',this)">
+      <i class="ti ti-history" aria-hidden="true"></i> Histórico
+    </button>
+  </div>
+
+  <div id="panel-generate" class="panel active">
 
   <!-- API Key -->
   <div class="card">
@@ -368,8 +405,93 @@
   <div class="status" id="status"></div>
   <div id="result-area"></div>
 
+  </div><!-- /panel-generate -->
+
+  <div id="panel-history" class="panel">
+    <div id="history-list"></div>
+  </div>
+
 </div>
 <script>
+IsdetTools.configure({});
+IsdetTools.mountSyncStatus(document.getElementById('sync-indicator'));
+
+const store = IsdetTools.createStore('pose-generator');
+const generationsCol = store.collection('generations');
+
+IsdetTools.onCrossTabWrite(() => {
+  if (document.getElementById('panel-history').classList.contains('active')) loadHistory();
+});
+
+function showTab(id, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'history') loadHistory();
+}
+
+async function saveGeneration(ds) {
+  const record = {
+    characterName: ds.personagem || charInput.value.trim(),
+    work: ds.obra || '',
+    poseCount: Array.isArray(ds.poses) ? ds.poses.length : 0,
+    language: $('lang-select').value,
+    context: $('ctx-frame').value.trim(),
+    data: ds,
+    savedAt: new Date().toISOString(),
+  };
+  try {
+    await generationsCol.save(record);
+    if (document.getElementById('panel-history').classList.contains('active')) loadHistory();
+  } catch (e) {
+    console.warn('Could not save generation:', e);
+  }
+}
+
+async function loadHistory() {
+  let records;
+  try {
+    records = await generationsCol.findAll();
+  } catch (e) {
+    document.getElementById('history-list').innerHTML = '<div class="history-empty">Erro ao carregar histórico.</div>';
+    return;
+  }
+  records.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  const el = document.getElementById('history-list');
+  if (!records.length) {
+    el.innerHTML = '<div class="history-empty">Nenhuma geração salva ainda.</div>';
+    return;
+  }
+  el.innerHTML = records.map(r => {
+    const date = r.savedAt ? new Date(r.savedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const posesLabel = r.poseCount === 1 ? '1 pose' : `${r.poseCount || 0} poses`;
+    return `<div class="history-card">
+      <div class="history-card-info">
+        <div class="history-card-title">${esc(r.characterName || '—')}</div>
+        <div class="history-card-sub">${r.work ? esc(r.work) + ' · ' : ''}${posesLabel} · ${date}</div>
+      </div>
+      <div class="history-card-actions">
+        <button class="btn-secondary" onclick="viewHistoryEntry('${r.id}')"><i class="ti ti-eye"></i> Ver resultado</button>
+        <button class="btn-danger" onclick="deleteHistoryEntry('${r.id}')"><i class="ti ti-trash"></i> Excluir</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function viewHistoryEntry(id) {
+  let record;
+  try { record = await generationsCol.find(id); } catch (e) { alert('Erro ao carregar geração.'); return; }
+  if (!record?.data) return;
+  showTab('generate', document.querySelector('.tab[data-tab="generate"]'));
+  renderResult(record.data);
+}
+
+async function deleteHistoryEntry(id) {
+  if (!confirm('Excluir esta geração do histórico?')) return;
+  try { await generationsCol.remove(id); await loadHistory(); } catch (e) { alert('Erro ao excluir.'); }
+}
+
 const $ = id => document.getElementById(id);
 const apiKeyInput = $('api-key'), toggleKey = $('toggle-key'), eyeIcon = $('eye-icon');
 const charInput = $('char-input');
@@ -586,6 +708,7 @@ analyzeBtn.addEventListener('click', async () => {
 
     setStatus('');
     renderResult(ds);
+    await saveGeneration(ds);
   } catch (e) {
     setStatus('');
     showError(e.message || 'Erro desconhecido.');
