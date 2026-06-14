@@ -208,6 +208,7 @@ tr.row-pending>td:first-child::after{content:'';position:absolute;left:0;top:20%
         <div class="field-row"><label>Alerta de estoque mínimo</label><input id="ins-min-stock" type="number" min="0" step="any"></div>
       </div>
       <div class="field-row"><label id="ins-notes-label">Notas</label><textarea id="ins-notes" placeholder="marca, fornecedor, observações..."></textarea></div>
+      <div class="field-row"><label>Link da compra</label><input id="ins-link" type="url" placeholder="https://..."></div>
       <button class="btn primary" onclick="saveSupply()"><i class="ti ti-plus" aria-hidden="true"></i> Cadastrar insumo</button>
     </div>
     <div class="card">
@@ -353,11 +354,44 @@ async function migratePurchaseIds() {
   }
 }
 
+async function migratePurchaseLinks() {
+  const toMigrate = purchases.filter(p => !p.purchaseLink && p.notes && /https?:\/\//.test(p.notes));
+  if (!toMigrate.length) return;
+  for (const p of toMigrate) {
+    const { link, cleaned } = extractLinkFromNotes(p.notes);
+    if (!link) continue;
+    p.purchaseLink = link;
+    p.notes = cleaned;
+    await purchasesCol.save(p);
+  }
+}
+
+async function migrateSupplyNoteLinks() {
+  const toMigrate = supplies.filter(s => s.notes && /https?:\/\//.test(s.notes));
+  if (!toMigrate.length) return;
+  for (const s of toMigrate) {
+    const { link, cleaned } = extractLinkFromNotes(s.notes);
+    if (!link) continue;
+    const supplyPurchases = purchases
+      .filter(p => p.supplyId === s.id)
+      .sort((a, b) => a.purchasedAt.localeCompare(b.purchasedAt));
+    const alreadyLinked = supplyPurchases.some(p => p.purchaseLink === link);
+    if (!alreadyLinked && supplyPurchases.length > 0) {
+      supplyPurchases[0].purchaseLink = link;
+      await purchasesCol.save(supplyPurchases[0]);
+    }
+    s.notes = cleaned;
+    await suppliesCol.save(s);
+  }
+}
+
 async function load() {
   supplies  = await suppliesCol.findAll();
   sessions  = await sessionsCol.findAll();
   purchases = await purchasesCol.findAll();
   await migratePurchaseIds();
+  await migratePurchaseLinks();
+  await migrateSupplyNoteLinks();
   renderAll();
 }
 
@@ -456,6 +490,15 @@ function refreshCustomSelects() {
 function fmt(n)       { return "R$ " + Number(n).toFixed(2).replace(".", ","); }
 function fmtN(n, d=2) { return Number(n).toFixed(d).replace(".", ","); }
 function costPerUnit(i) { return i.quantity > 0 ? i.price / i.quantity : 0; }
+
+function extractLinkFromNotes(notes) {
+  if (!notes) return { link: "", cleaned: "" };
+  const match = notes.match(/https?:\/\/\S+/);
+  if (!match) return { link: "", cleaned: notes };
+  const link = match[0].replace(/[.,;:!?)]+$/, "");
+  const cleaned = notes.replace(match[0], "").replace(/\s+/g, " ").trim();
+  return { link, cleaned };
+}
 
 function showTab(id, btn) {
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -728,12 +771,13 @@ async function saveSupply() {
     price,
     purchasedAt: new Date().toISOString().slice(0, 10),
     notes: document.getElementById("ins-notes").value.trim(),
+    purchaseLink: document.getElementById("ins-link").value.trim(),
   };
   purchases.push(purchase);
   await purchasesCol.save(purchase);
 
   renderAll(); renderSessionSupplies();
-  ["ins-name","ins-quantity","ins-price","ins-min-stock","ins-notes"]
+  ["ins-name","ins-quantity","ins-price","ins-min-stock","ins-notes","ins-link"]
     .forEach(id => document.getElementById(id).value = "");
   resetStockLock();
   clearExistingSupply();
@@ -905,7 +949,7 @@ function renderSuppliesTable() {
       : '';
     const historyRows = history.map(p => `<tr style="background:var(--bg2)">
       <td></td>
-      <td colspan="2" style="color:var(--text3);font-size:12px;padding-left:1.5rem">${p.purchasedAt}${p.notes ? `<br><span style="font-size:11px;font-style:italic">${p.notes}</span>` : ""}</td>
+      <td colspan="2" style="color:var(--text3);font-size:12px;padding-left:1.5rem">${p.purchasedAt}${p.purchaseLink ? `<a href="${p.purchaseLink}" target="_blank" rel="noopener noreferrer" title="Abrir link da compra" style="color:var(--text3);margin-left:6px;text-decoration:none;vertical-align:middle"><i class="ti ti-external-link" style="font-size:13px" aria-hidden="true"></i></a>` : ""}${p.notes ? `<br><span style="font-size:11px;font-style:italic">${p.notes}</span>` : ""}</td>
       <td style="font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap">${fmtUnitCost(p.price / p.quantity, p.unit)}</td>
       <td style="font-size:12px">${fmtStock(p.quantity, p.unit)}</td>
       <td style="font-size:12px;color:var(--text3)">${fmt(p.price)}</td>
@@ -971,7 +1015,8 @@ function openEditPurchaseModal(purchaseId) {
       <div class="field-row" style="margin-bottom:10px"><label>Data</label><input type="date" id="epp-date"></div>
       <div class="field-row" style="margin-bottom:10px"><label>Quantidade comprada</label><input type="number" id="epp-quantity" min="0" step="any"></div>
       <div class="field-row" style="margin-bottom:10px"><label>Valor pago (R$)</label><input type="number" id="epp-price" min="0" step="any"></div>
-      <div class="field-row" style="margin-bottom:14px"><label>Notas</label><textarea id="epp-notes" style="min-height:56px"></textarea></div>
+      <div class="field-row" style="margin-bottom:10px"><label>Notas</label><textarea id="epp-notes" style="min-height:56px"></textarea></div>
+      <div class="field-row" style="margin-bottom:14px"><label>Link da compra</label><input type="url" id="epp-link" placeholder="https://" style="font-size:13px;padding:7px 10px;background:var(--bg2);border:0.5px solid var(--border);border-radius:var(--rad);color:var(--text);width:100%"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn" onclick="document.getElementById('__isdet_edit_purchase__').remove()">Cancelar</button>
         <button class="btn primary" onclick="saveEditedPurchase(${purchaseId})">Salvar</button>
@@ -982,6 +1027,7 @@ function openEditPurchaseModal(purchaseId) {
   document.getElementById("epp-quantity").value = p.quantity;
   document.getElementById("epp-price").value    = p.price;
   document.getElementById("epp-notes").value    = p.notes || "";
+  document.getElementById("epp-link").value     = p.purchaseLink || "";
 }
 
 async function saveEditedPurchase(purchaseId) {
@@ -997,6 +1043,7 @@ async function saveEditedPurchase(purchaseId) {
   if (!price || price <= 0) { showFieldError("epp-price", "Informe um valor pago maior que zero."); valid = false; }
   if (!valid) return;
   const notes   = document.getElementById("epp-notes").value.trim();
+  const link    = document.getElementById("epp-link").value.trim();
   const supply = supplies.find(s => s.id === p.supplyId);
   if (supply) {
     supply.quantity = supply.quantity - p.quantity + qty;
@@ -1004,10 +1051,11 @@ async function saveEditedPurchase(purchaseId) {
     supply.stock    = supply.stock    - p.quantity + qty;
     await suppliesCol.save(supply);
   }
-  p.purchasedAt = date;
-  p.quantity    = qty;
-  p.price       = price;
-  p.notes       = notes;
+  p.purchasedAt    = date;
+  p.quantity       = qty;
+  p.price          = price;
+  p.notes          = notes;
+  p.purchaseLink   = link;
   await purchasesCol.save(p);
   document.getElementById("__isdet_edit_purchase__").remove();
   renderAll(); renderSessionSupplies();
