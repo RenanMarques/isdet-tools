@@ -20,6 +20,16 @@
 
 ---
 
+### Migrações inline a remover (costs/index.html)
+
+Funções de migração temporárias chamadas em `load()`. Podem ser removidas assim que todos os dados em produção já tiverem sido migrados (verificar no D1 que nenhum registro tem os campos antigos).
+
+- [ ] **`migratePurchaseIds()`** — converte compras com `supplyName` (string) para `supplyId` (referência numérica). Remover quando não existirem mais registros em `purchases` com campo `supplyName`.
+- [ ] **`migratePurchaseLinks()`** — extrai URLs das `notes` de compras para o novo campo `purchaseLink`. Remover quando não existirem mais registros em `purchases` com URL em `notes` e sem `purchaseLink`.
+- [ ] **`migrateSupplyNoteLinks()`** — extrai URLs das `notes` de insumos para o `purchaseLink` da compra mais antiga do insumo. Remover junto com `migratePurchaseLinks()`. Ao remover, avaliar se `extractLinkFromNotes()` ainda tem uso — se não, remover também.
+
+---
+
 ### Lacunas de teste
 
 - [x] **`dismissDeadLetterOp` — teste de integração real** — `test/sdk-integration.spec.js`: dispara OCC 409 real contra wrangler dev → verifica dead-letter → chama dismiss → confirma remoção de localStorage e de `getDeadLetterOps()`
