@@ -937,19 +937,21 @@ async function deletePurchase(purchaseId) {
   const p = purchases.find(x => x.id === purchaseId);
   if (!p) return;
   const supply = supplies.find(s => s.id === p.supplyId);
-  let quantityZeroed = false;
+  purchases = purchases.filter(x => x.id !== purchaseId);
+  await purchasesCol.remove(purchaseId);
   if (supply) {
     supply.quantity -= p.quantity;
     supply.price    -= p.price;
-    if (supply.quantity <= 0) quantityZeroed = true;
-    await suppliesCol.save(supply);
+    supply.stock    -= p.quantity;
+    const remaining = purchases.filter(x => x.supplyId === supply.id);
+    if (remaining.length === 0) {
+      supplies = supplies.filter(s => s.id !== supply.id);
+      await suppliesCol.remove(supply.id);
+    } else {
+      await suppliesCol.save(supply);
+    }
   }
-  purchases = purchases.filter(x => x.id !== purchaseId);
-  await purchasesCol.remove(purchaseId);
   renderAll(); renderSessionSupplies();
-  if (quantityZeroed) {
-    alert(`O histórico de compras de "${supply.name}" ficou zerado. O estoque exibido pode não refletir as compras registradas — verifique o valor manualmente.`);
-  }
 }
 
 function openEditPurchaseModal(purchaseId) {
@@ -999,6 +1001,7 @@ async function saveEditedPurchase(purchaseId) {
   if (supply) {
     supply.quantity = supply.quantity - p.quantity + qty;
     supply.price    = supply.price    - p.price    + price;
+    supply.stock    = supply.stock    - p.quantity + qty;
     await suppliesCol.save(supply);
   }
   p.purchasedAt = date;
